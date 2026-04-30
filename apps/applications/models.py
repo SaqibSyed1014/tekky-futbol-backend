@@ -90,6 +90,9 @@ class Application(models.Model):
     message = models.TextField(null=True, blank=True)
     admin_notes = models.TextField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
+    # Team logo uploaded at registration time (captain applications only).
+    # Stored in S3 when AWS credentials are configured, local disk otherwise.
+    logo = models.FileField(upload_to="team_logos/", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 

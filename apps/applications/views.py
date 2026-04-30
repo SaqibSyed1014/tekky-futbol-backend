@@ -125,11 +125,15 @@ class PublicApplicationCreateView(APIView):
         serializer = PublicApplicationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        application = ApplicationService.register_and_apply(serializer.validated_data)
+        logo_file = request.FILES.get("logo") or None
+        application = ApplicationService.register_and_apply(
+            serializer.validated_data,
+            logo_file=logo_file,
+        )
 
         logger.info(
-            "Public registration submitted: application=%s type=%s",
-            application.id, application.type,
+            "Public registration submitted: application=%s type=%s logo=%s",
+            application.id, application.type, bool(logo_file),
         )
         return Response(
             ApplicationSerializer(application).data,
@@ -293,7 +297,7 @@ class AdminApplicationUpdateView(APIView):
             updated.id, updated.status, request.user.id,
         )
         return Response(
-            ApplicationSerializer(updated).data,
+            AdminApplicationFlatSerializer(updated).data,
             status=status.HTTP_200_OK,
         )
 

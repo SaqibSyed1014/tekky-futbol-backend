@@ -29,6 +29,7 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+    "storages",
 ]
 
 LOCAL_APPS = [
@@ -123,10 +124,37 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# ---------------------------------------------------------------------------
+# AWS S3 — team logo uploads
+# Credentials are optional; local FileSystemStorage is used when absent.
+# ---------------------------------------------------------------------------
+AWS_ACCESS_KEY_ID     = config("AWS_ACCESS_KEY_ID",     default="")
+AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
+AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="")
+AWS_S3_REGION_NAME    = config("AWS_S3_REGION_NAME",    default="us-east-1")
+AWS_S3_FILE_OVERWRITE = False
+AWS_DEFAULT_ACL = None
+AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+
+# Use S3 for media files when credentials are present, otherwise local disk.
+_s3_configured = bool(AWS_ACCESS_KEY_ID and AWS_STORAGE_BUCKET_NAME)
+
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+    "default": {
+        "BACKEND": (
+            "storages.backends.s3boto3.S3Boto3Storage"
+            if _s3_configured
+            else "django.core.files.storage.FileSystemStorage"
+        ),
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Django REST Framework
