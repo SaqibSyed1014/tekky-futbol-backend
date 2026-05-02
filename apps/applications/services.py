@@ -289,6 +289,11 @@ class ApplicationService:
             "Application %s status: %s → %s (reviewed by %s)",
             application.id, old_status, new_status, reviewed_by.id,
         )
+
+        # Send email notification to applicant — fires after transaction commits.
+        from .email_service import send_status_notification  # local import avoids circular
+        send_status_notification(application)
+
         return application
 
     @staticmethod

@@ -157,6 +157,20 @@ STORAGES = {
 }
 
 # ---------------------------------------------------------------------------
+# Email — AWS SES
+# In production the SES backend is used when credentials are present.
+# In development the console backend is set in dev.py (prints to terminal).
+# ---------------------------------------------------------------------------
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@tekkyfutbol.com")
+EMAIL_BACKEND = (
+    "django_ses.SESBackend"
+    if _s3_configured  # SES uses the same IAM credentials as S3
+    else "django.core.mail.backends.console.EmailBackend"
+)
+AWS_SES_REGION_NAME     = AWS_S3_REGION_NAME
+AWS_SES_REGION_ENDPOINT = f"email.{AWS_S3_REGION_NAME}.amazonaws.com"
+
+# ---------------------------------------------------------------------------
 # Django REST Framework
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
