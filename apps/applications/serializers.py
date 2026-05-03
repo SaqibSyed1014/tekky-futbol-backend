@@ -362,6 +362,7 @@ class AdminApplicationFlatSerializer(serializers.ModelSerializer):
     teamName   = serializers.SerializerMethodField()
     rosterSize = serializers.SerializerMethodField()
     adminNotes = serializers.CharField(source="admin_notes", read_only=True, default="")
+    logoUrl    = serializers.SerializerMethodField()
 
     class Meta:
         model = Application
@@ -372,6 +373,7 @@ class AdminApplicationFlatSerializer(serializers.ModelSerializer):
             # detail drawer
             "phone", "gender", "instagram",
             "reasonForCompeting", "teamName", "rosterSize", "adminNotes",
+            "logoUrl",
         ]
         read_only_fields = fields
 
@@ -392,3 +394,11 @@ class AdminApplicationFlatSerializer(serializers.ModelSerializer):
     def get_rosterSize(self, obj) -> str:
         value = (obj.metadata or {}).get("roster_size")
         return str(value) if value else ""
+
+    def get_logoUrl(self, obj) -> str:
+        if not obj.logo:
+            return ""
+        try:
+            return obj.logo.url
+        except Exception:
+            return ""

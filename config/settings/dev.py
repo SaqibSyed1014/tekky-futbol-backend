@@ -2,6 +2,9 @@ from .base import *  # noqa: F401, F403
 
 DEBUG = True
 
+# Always print emails to the terminal in development — no SES calls, no cost.
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
 # Browsable API in development
 REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = (  # noqa: F405
     "rest_framework.renderers.JSONRenderer",

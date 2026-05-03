@@ -18,6 +18,13 @@ dj-database-url==2.3.0
 # Dev tools
 django-extensions==3.2.3
 
+# File storage — S3
+django-storages[s3]==1.14.4
+boto3==1.35.99
+
+# Email — AWS SES
+django-ses==4.3.0
+
 # Production
 gunicorn==23.0.0
 whitenoise==6.8.2

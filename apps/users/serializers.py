@@ -198,7 +198,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """
-    Full identity payload returned by GET /auth/me.
+    Full identity payload returned by GET /auth/me and GET /users/me.
     Nests the player profile when it exists; null for admin users.
     """
 
@@ -209,6 +209,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "email",
+            "name",
+            "phone",
+            "gender",
             "role",
             "is_captain",
             "is_active",

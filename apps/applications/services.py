@@ -191,12 +191,22 @@ class ApplicationService:
                 "Cannot approve captain application: 'team_name' missing from metadata."
             )
 
+        # Prefer the uploaded logo URL (S3); fall back to any URL in metadata.
+        logo_url = None
+        if application.logo:
+            raw = application.logo.url
+            # Only store full URLs in the URLField; skip relative local-dev paths.
+            if raw.startswith("http"):
+                logo_url = raw
+        if logo_url is None:
+            logo_url = metadata.get("team_logo_url")
+
         team = TeamService.create_team(
             captain=application.applicant,
             name=team_name,
             slug=metadata.get("team_slug"),
             description=metadata.get("team_description"),
-            logo_url=metadata.get("team_logo_url"),
+            logo_url=logo_url,
             max_players=metadata.get("max_players", 11),
         )
 
@@ -279,11 +289,16 @@ class ApplicationService:
             "Application %s status: %s → %s (reviewed by %s)",
             application.id, old_status, new_status, reviewed_by.id,
         )
+
+        # Send email notification to applicant — fires after transaction commits.
+        from .email_service import send_status_notification  # local import avoids circular
+        send_status_notification(application)
+
         return application
 
     @staticmethod
     @transaction.atomic
-    def register_and_apply(validated_data: dict) -> "Application":
+    def register_and_apply(validated_data: dict, logo_file=None) -> "Application":
         """
         Public registration — creates a User + PlayerProfile + Application
         in one atomic transaction.  No authentication required.
@@ -345,6 +360,12 @@ class ApplicationService:
             message=validated_data["reasonForCompeting"],
             metadata=metadata,
         )
+
+        # 5. Attach team logo if provided (captain applications only).
+        #    FileField saves to S3 (prod) or local media (dev) automatically.
+        if logo_file and app_type == Application.Type.CAPTAIN:
+            application.logo = logo_file
+            application.save(update_fields=["logo"])
 
         logger.info(
             "Public registration: user=%s type=%s application=%s",

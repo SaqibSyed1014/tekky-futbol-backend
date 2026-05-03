@@ -1,5 +1,7 @@
 import logging
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -190,3 +192,60 @@ class UserMeView(APIView):
         )
         self.check_object_permissions(request, user)
         return Response(UserDetailSerializer(user).data, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# POST /users/change-password  (players only — admins have no UI for this)
+# ---------------------------------------------------------------------------
+
+
+class ChangePasswordView(APIView):
+    """
+    Change the authenticated user's password.
+
+    Request body:
+        { "old_password": "...", "new_password": "...", "confirm_password": "..." }
+
+    Validates:
+    - old_password matches the current password.
+    - new_password passes Django's configured validators.
+    - new_password == confirm_password.
+
+    Permission: authenticated users only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        user = request.user
+        old_password     = request.data.get("old_password", "")
+        new_password     = request.data.get("new_password", "")
+        confirm_password = request.data.get("confirm_password", "")
+
+        if not user.check_password(old_password):
+            return Response(
+                {"old_password": "Current password is incorrect."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if new_password != confirm_password:
+            return Response(
+                {"confirm_password": "Passwords do not match."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(new_password, user)
+        except DjangoValidationError as exc:
+            return Response(
+                {"new_password": list(exc.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.save(update_fields=["password", "updated_at"])
+        logger.info("User %s changed their password", user.id)
+        return Response(
+            {"detail": "Password updated successfully."},
+            status=status.HTTP_200_OK,
+        )
