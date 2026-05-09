@@ -153,7 +153,7 @@ class TeamInviteSerializer(serializers.ModelSerializer):
 
     def get_inviteUrl(self, obj: TeamInvite) -> str:
         from django.conf import settings
-        base = getattr(settings, "FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+        base = getattr(settings, "FRONTEND_BASE_URL", "https://tekkyfutbol.net").rstrip("/")
         if obj.invite_type == TeamInvite.InviteType.LINK:
             return f"{base}/register?invite={obj.token}"
         return f"{base}/join/{obj.token}"
