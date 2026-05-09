@@ -1,6 +1,7 @@
 from rest_framework.permissions import BasePermission, IsAuthenticated  # noqa: F401 — re-exported for convenience
 
 
+
 class IsAdmin(BasePermission):
     """
     Grants access only to authenticated users with role='admin'.
@@ -82,3 +83,24 @@ class IsOwner(BasePermission):
             return applicant == request.user
 
         return False
+
+
+class IsCaptain(BasePermission):
+    """
+    Grants access only to authenticated players who are captains of a team.
+
+    Checks authentication internally — same 401/403 split as IsAdmin/IsPlayer.
+
+    Usage:
+        permission_classes = [IsCaptain]
+    """
+
+    message = "You must be a team captain to perform this action."
+
+    def has_permission(self, request, view) -> bool:
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == "player"
+            and request.user.is_captain
+        )

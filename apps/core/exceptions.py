@@ -51,6 +51,22 @@ class MissingApplicationMetadataError(DomainError):
     """Required metadata key is absent from the application payload."""
 
 
+class InviteExpiredError(DomainError):
+    """The invite token has passed its expiry date."""
+
+
+class InviteInvalidError(DomainError):
+    """The invite token does not exist or is not in a usable state."""
+
+
+class PlayerAlreadyInvitedError(DomainError):
+    """A pending direct invite already exists for this player on this team."""
+
+
+class PlayerNotOnTeamError(DomainError):
+    """The player is not a member of the specified team."""
+
+
 # ---------------------------------------------------------------------------
 # Domain error → HTTP status mapping
 # ---------------------------------------------------------------------------
@@ -65,6 +81,10 @@ _DOMAIN_STATUS_MAP: dict[type[DomainError], int] = {
     ProfileNotFoundError: status.HTTP_404_NOT_FOUND,
     ApplicationRequiresTeamError: status.HTTP_400_BAD_REQUEST,
     MissingApplicationMetadataError: status.HTTP_400_BAD_REQUEST,
+    InviteExpiredError: status.HTTP_410_GONE,
+    InviteInvalidError: status.HTTP_404_NOT_FOUND,
+    PlayerAlreadyInvitedError: status.HTTP_409_CONFLICT,
+    PlayerNotOnTeamError: status.HTTP_404_NOT_FOUND,
 }
 
 
