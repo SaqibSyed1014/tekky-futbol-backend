@@ -201,14 +201,14 @@ class ApplicationService:
         if logo_url is None:
             logo_url = metadata.get("team_logo_url")
 
-        # roster_size is stored in metadata during registration (8–11 range).
+        # roster_size is stored in metadata during registration (9–11 range).
         # Fall back to max_players key (legacy) then to 11.
         roster_size = metadata.get("roster_size") or metadata.get("max_players") or 11
         try:
             roster_size = int(roster_size)
         except (TypeError, ValueError):
             roster_size = 11
-        roster_size = max(8, min(11, roster_size))  # clamp to valid range
+        roster_size = max(9, min(11, roster_size))  # clamp to valid range
 
         team = TeamService.create_team(
             captain=application.applicant,
