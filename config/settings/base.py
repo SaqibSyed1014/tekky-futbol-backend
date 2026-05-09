@@ -162,7 +162,7 @@ STORAGES = {
 # In development the console backend is set in dev.py (prints to terminal).
 # ---------------------------------------------------------------------------
 DEFAULT_FROM_EMAIL  = config("DEFAULT_FROM_EMAIL",  default="noreply@tekkyfutbol.com")
-FRONTEND_BASE_URL   = config("FRONTEND_BASE_URL",   default="http://localhost:3000")
+FRONTEND_BASE_URL   = config("FRONTEND_BASE_URL",   default="https://tekkyfutbol.net")
 EMAIL_BACKEND = (
     "django_ses.SESBackend"
     if _s3_configured  # SES uses the same IAM credentials as S3
