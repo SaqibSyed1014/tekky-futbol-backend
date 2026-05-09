@@ -294,7 +294,7 @@ class FreeAgentSerializer(serializers.ModelSerializer):
     name        = serializers.CharField(source="user.name",       read_only=True)
     email       = serializers.EmailField(source="user.email",     read_only=True)
     division    = serializers.CharField(source="preferred_division", read_only=True, default="")
-    instagram   = serializers.CharField(source="instagram",       read_only=True, default="")
+    instagram   = serializers.CharField(read_only=True, default="")
     memberSince = serializers.DateTimeField(source="user.created_at", read_only=True)
 
     class Meta:
