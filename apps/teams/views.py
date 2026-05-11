@@ -814,6 +814,7 @@ class LinkInviteRegisterView(APIView):
                 name=data.get("name", ""),
                 phone=data.get("phone", ""),
                 gender=data.get("gender", ""),
+                preferred_division=data.get("preferred_division", ""),
             )
         except DomainError as exc:
             return Response(

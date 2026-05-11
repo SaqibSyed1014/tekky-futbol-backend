@@ -513,6 +513,7 @@ class InviteService:
         name: str = "",
         phone: str = "",
         gender: str = "",
+        preferred_division: str = "",
     ) -> tuple[User, TeamMembership]:
         """
         Atomic registration + team join for a non-registered user arriving
@@ -564,6 +565,12 @@ class InviteService:
             phone=phone,
             gender=gender,
         )
+
+        # Save preferred_division on the PlayerProfile if provided
+        if preferred_division:
+            profile = user.profile
+            profile.preferred_division = preferred_division
+            profile.save(update_fields=["preferred_division", "updated_at"])
 
         # 3. Create PENDING membership — admin approves before player counts as
         #    a roster member. joined_at is set because the user has committed.

@@ -47,7 +47,7 @@ class Team(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(max_players__gte=9) & models.Q(max_players__lte=11),
+                check=models.Q(max_players__gte=8) & models.Q(max_players__lte=11),
                 name="teams_max_players_range",
             ),
         ]

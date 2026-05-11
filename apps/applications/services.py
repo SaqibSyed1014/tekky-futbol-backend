@@ -208,7 +208,7 @@ class ApplicationService:
             roster_size = int(roster_size)
         except (TypeError, ValueError):
             roster_size = 11
-        roster_size = max(9, min(11, roster_size))  # clamp to valid range
+        roster_size = max(8, min(11, roster_size))  # clamp to valid range
 
         team = TeamService.create_team(
             captain=application.applicant,
