@@ -110,7 +110,7 @@ class WaiverStatusSerializer(serializers.ModelSerializer):
 
 
 # ---------------------------------------------------------------------------
-# Admin output — full record with user info
+# Admin output — list (summary columns only)
 # ---------------------------------------------------------------------------
 
 class AdminWaiverListSerializer(serializers.ModelSerializer):
@@ -149,5 +149,61 @@ class AdminWaiverListSerializer(serializers.ModelSerializer):
             "guardian_phone",
             "signed_at",
             "ip_address",
+        ]
+        read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
+# Admin output — full detail (all fields, for the "View Waiver" modal/page)
+# ---------------------------------------------------------------------------
+
+class AdminWaiverDetailSerializer(serializers.ModelSerializer):
+    """
+    Complete waiver record returned by GET /api/v1/admin/waivers/<user_id>/.
+    Used by the admin "View Waiver" feature — all fields pre-filled, read-only.
+    """
+    user_id    = serializers.UUIDField(source="user.id",         read_only=True)
+    user_email = serializers.EmailField(source="user.email",     read_only=True)
+    user_name  = serializers.CharField(source="user.name",       read_only=True)
+    user_phone = serializers.CharField(source="user.phone",      read_only=True, allow_null=True)
+    user_role  = serializers.CharField(source="user.role",       read_only=True)
+    is_captain = serializers.BooleanField(source="user.is_captain", read_only=True)
+
+    class Meta:
+        model = WaiverSignature
+        fields = [
+            # ── User identity ──────────────────────────────────────────────
+            "id",
+            "user_id",
+            "user_name",
+            "user_email",
+            "user_phone",
+            "user_role",
+            "is_captain",
+            # ── Participant personal info ──────────────────────────────────
+            "date_of_birth",
+            "address",
+            "participant_phone",
+            "medical_conditions",
+            "emergency_contact_name",
+            "emergency_contact_rel",
+            "emergency_contact_phone",
+            # ── Age group + guardian ───────────────────────────────────────
+            "is_minor",
+            "guardian_signature",
+            "guardian_name_printed",
+            "guardian_email",
+            "guardian_phone",
+            "guardian_type",
+            # ── Adult sign-off ─────────────────────────────────────────────
+            "printed_name",
+            "signature_image",
+            # ── Clauses ────────────────────────────────────────────────────
+            "clauses_initialed",
+            # ── Audit metadata ─────────────────────────────────────────────
+            "waiver_version",
+            "signed_at",
+            "ip_address",
+            "user_agent",
         ]
         read_only_fields = fields

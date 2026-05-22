@@ -10,7 +10,7 @@ from django.urls import path
 from apps.applications.views import AdminApplicationListView, AdminApplicationUpdateView
 from apps.teams.views import AdminMembershipActionView, AdminMembershipListView, AdminTeamListView
 from apps.users.admin_views import AdminUserListView
-from apps.waivers.views import AdminWaiverSignedListView, AdminWaiverUnsignedListView
+from apps.waivers.views import AdminWaiverDetailView, AdminWaiverSignedListView, AdminWaiverUnsignedListView
 
 # fmt: off
 urlpatterns = [
@@ -49,5 +49,6 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path("waivers/signed/",                 AdminWaiverSignedListView.as_view(),   name="admin_waiver_signed"),
     path("waivers/unsigned/",               AdminWaiverUnsignedListView.as_view(), name="admin_waiver_unsigned"),
+    path("waivers/<uuid:user_id>/",         AdminWaiverDetailView.as_view(),       name="admin_waiver_detail"),
 ]
 # fmt: on

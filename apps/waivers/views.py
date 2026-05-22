@@ -11,6 +11,7 @@ from apps.core.permissions import IsAdmin
 
 from .models import WaiverSignature
 from .serializers import (
+    AdminWaiverDetailSerializer,
     AdminWaiverListSerializer,
     WaiverSignatureCreateSerializer,
     WaiverStatusSerializer,
@@ -170,3 +171,30 @@ class AdminWaiverUnsignedListView(generics.ListAPIView):
             return self.get_paginated_response(serializer.data)
         serializer = AdminUserListSerializer(qs, many=True)
         return Response(serializer.data)
+
+
+class AdminWaiverDetailView(APIView):
+    """
+    GET /api/v1/admin/waivers/<user_id>/
+
+    Returns the complete waiver record for the given user.
+    Used by the admin "View Waiver" feature to display a read-only,
+    pre-filled copy of the participant's signed form.
+
+    Permission: IsAdmin only.
+    """
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request, user_id):
+        try:
+            sig = (
+                WaiverSignature.objects
+                .select_related("user")
+                .get(user_id=user_id)
+            )
+        except WaiverSignature.DoesNotExist:
+            return Response(
+                {"detail": "No waiver found for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(AdminWaiverDetailSerializer(sig).data)
