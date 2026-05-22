@@ -143,8 +143,8 @@ class MeView(APIView):
                           check_object_permissions so no inline role check
                           is needed in the handler.
 
-    Uses select_related("profile__team") to resolve the full response in
-    a single DB query.
+    Uses select_related("profile__team", "waiver_signature") to resolve
+    the full response in a single DB query.
     """
 
     permission_classes = [IsAuthenticated, IsOwner]
@@ -154,7 +154,7 @@ class MeView(APIView):
 
         User = get_user_model()
         user = (
-            User.objects.select_related("profile__team")
+            User.objects.select_related("profile__team", "waiver_signature")
             .get(pk=request.user.pk)
         )
         self.check_object_permissions(request, user)
@@ -187,7 +187,7 @@ class UserMeView(APIView):
 
         User = get_user_model()
         user = (
-            User.objects.select_related("profile__team")
+            User.objects.select_related("profile__team", "waiver_signature")
             .get(pk=request.user.pk)
         )
         self.check_object_permissions(request, user)

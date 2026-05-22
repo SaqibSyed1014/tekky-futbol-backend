@@ -160,49 +160,24 @@ class PlayerProfileUpdateSerializer(serializers.ModelSerializer):
 
 
 # ---------------------------------------------------------------------------
-# JWT — custom token serializer
-# ---------------------------------------------------------------------------
-
-
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """
-    Extends simplejwt's default serializer to:
-    1. Embed lightweight claims (email, role, is_captain) inside the JWT
-       payload so the frontend can decode basic identity without an API call.
-    2. Include the full user object in the HTTP response body alongside the
-       tokens.
-    """
-
-    @classmethod
-    def get_token(cls, user: User):
-        token = super().get_token(user)
-        # Custom JWT payload claims
-        token["email"] = user.email
-        token["role"] = user.role
-        token["is_captain"] = user.is_captain
-        return token
-
-    def validate(self, attrs: dict) -> dict:
-        data = super().validate(attrs)
-        # Append user representation to the response body
-        data["user"] = UserSerializer(self.user).data
-        # 'token' alias so the frontend can do auth.setToken(data.token)
-        data["token"] = data["access"]
-        return data
-
-
-# ---------------------------------------------------------------------------
 # /auth/me — user + profile in a single response
+# (defined before CustomTokenObtainPairSerializer so the login response
+#  can use this serializer and include waiver_signed in the login payload)
 # ---------------------------------------------------------------------------
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """
-    Full identity payload returned by GET /auth/me and GET /users/me.
+    Full identity payload returned by GET /auth/me, GET /users/me,
+    POST /auth/login, and POST /auth/register.
+
     Nests the player profile when it exists; null for admin users.
+    Includes waiver_signed so the frontend can gate access immediately
+    without an extra round-trip after login.
     """
 
-    profile = PlayerProfileSerializer(read_only=True)
+    profile       = PlayerProfileSerializer(read_only=True)
+    waiver_signed = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -216,10 +191,53 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "is_captain",
             "is_active",
             "profile",
+            "waiver_signed",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_waiver_signed(self, obj) -> bool:
+        return hasattr(obj, "waiver_signature")
+
+
+# ---------------------------------------------------------------------------
+# JWT — custom token serializer
+# ---------------------------------------------------------------------------
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Extends simplejwt's default serializer to:
+    1. Embed lightweight claims (email, role, is_captain) inside the JWT
+       payload so the frontend can decode basic identity without an API call.
+    2. Include the full UserDetailSerializer payload in the HTTP response
+       body (including waiver_signed and profile) so the frontend has
+       everything it needs immediately after login.
+    """
+
+    @classmethod
+    def get_token(cls, user: User):
+        token = super().get_token(user)
+        # Custom JWT payload claims
+        token["email"] = user.email
+        token["role"] = user.role
+        token["is_captain"] = user.is_captain
+        return token
+
+    def validate(self, attrs: dict) -> dict:
+        data = super().validate(attrs)
+        # Re-fetch with select_related so waiver_signed + profile resolve
+        # in a single extra query rather than multiple lazy loads.
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user = User.objects.select_related(
+            "profile__team", "waiver_signature"
+        ).get(pk=self.user.pk)
+        data["user"] = UserDetailSerializer(user).data
+        # 'token' alias so the frontend can do auth.setToken(data.token)
+        data["token"] = data["access"]
+        return data
 
 
 # ---------------------------------------------------------------------------
@@ -240,20 +258,23 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     """
 
     profile_status = serializers.SerializerMethodField()
-    team_id = serializers.SerializerMethodField()
-    team_name = serializers.SerializerMethodField()
+    team_id        = serializers.SerializerMethodField()
+    team_name      = serializers.SerializerMethodField()
+    waiver_signed  = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id",
             "email",
+            "name",
             "role",
             "is_captain",
             "is_active",
             "profile_status",
             "team_id",
             "team_name",
+            "waiver_signed",
             "created_at",
             "updated_at",
         ]
@@ -276,3 +297,6 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         profile = getattr(obj, "profile", None)
         team = getattr(profile, "team", None)
         return team.name if team else None
+
+    def get_waiver_signed(self, obj) -> bool:
+        return hasattr(obj, "waiver_signature")

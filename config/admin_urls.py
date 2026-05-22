@@ -10,6 +10,7 @@ from django.urls import path
 from apps.applications.views import AdminApplicationListView, AdminApplicationUpdateView
 from apps.teams.views import AdminMembershipActionView, AdminMembershipListView, AdminTeamListView
 from apps.users.admin_views import AdminUserListView
+from apps.waivers.views import AdminWaiverSignedListView, AdminWaiverUnsignedListView
 
 # fmt: off
 urlpatterns = [
@@ -40,5 +41,13 @@ urlpatterns = [
     # GET  /api/v1/admin/teams/   — list all teams with roster counts
     # ------------------------------------------------------------------
     path("teams/",                          AdminTeamListView.as_view(),           name="admin_team_list"),
+
+    # ------------------------------------------------------------------
+    # Waivers
+    # GET /api/v1/admin/waivers/signed/
+    # GET /api/v1/admin/waivers/unsigned/
+    # ------------------------------------------------------------------
+    path("waivers/signed/",                 AdminWaiverSignedListView.as_view(),   name="admin_waiver_signed"),
+    path("waivers/unsigned/",               AdminWaiverUnsignedListView.as_view(), name="admin_waiver_unsigned"),
 ]
 # fmt: on
