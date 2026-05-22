@@ -154,7 +154,7 @@ class MeView(APIView):
 
         User = get_user_model()
         user = (
-            User.objects.select_related("profile__team")
+            User.objects.select_related("profile__team", "waiver_signature")
             .get(pk=request.user.pk)
         )
         self.check_object_permissions(request, user)
@@ -187,7 +187,7 @@ class UserMeView(APIView):
 
         User = get_user_model()
         user = (
-            User.objects.select_related("profile__team")
+            User.objects.select_related("profile__team", "waiver_signature")
             .get(pk=request.user.pk)
         )
         self.check_object_permissions(request, user)

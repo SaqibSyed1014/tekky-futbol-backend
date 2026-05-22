@@ -200,9 +200,11 @@ class UserDetailSerializer(serializers.ModelSerializer):
     """
     Full identity payload returned by GET /auth/me and GET /users/me.
     Nests the player profile when it exists; null for admin users.
+    Includes waiver_signed so the frontend can gate access immediately.
     """
 
-    profile = PlayerProfileSerializer(read_only=True)
+    profile       = PlayerProfileSerializer(read_only=True)
+    waiver_signed = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -216,10 +218,14 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "is_captain",
             "is_active",
             "profile",
+            "waiver_signed",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_waiver_signed(self, obj) -> bool:
+        return hasattr(obj, "waiver_signature")
 
 
 # ---------------------------------------------------------------------------
@@ -240,20 +246,23 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     """
 
     profile_status = serializers.SerializerMethodField()
-    team_id = serializers.SerializerMethodField()
-    team_name = serializers.SerializerMethodField()
+    team_id        = serializers.SerializerMethodField()
+    team_name      = serializers.SerializerMethodField()
+    waiver_signed  = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id",
             "email",
+            "name",
             "role",
             "is_captain",
             "is_active",
             "profile_status",
             "team_id",
             "team_name",
+            "waiver_signed",
             "created_at",
             "updated_at",
         ]
@@ -276,3 +285,6 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         profile = getattr(obj, "profile", None)
         team = getattr(profile, "team", None)
         return team.name if team else None
+
+    def get_waiver_signed(self, obj) -> bool:
+        return hasattr(obj, "waiver_signature")

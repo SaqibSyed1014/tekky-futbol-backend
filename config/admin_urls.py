@@ -9,6 +9,7 @@ from django.urls import path
 
 from apps.applications.views import AdminApplicationListView, AdminApplicationUpdateView
 from apps.users.admin_views import AdminUserListView
+from apps.waivers.views import AdminWaiverSignedListView, AdminWaiverUnsignedListView
 
 # fmt: off
 urlpatterns = [
@@ -25,5 +26,13 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path("applications/",                   AdminApplicationListView.as_view(),    name="admin_application_list"),
     path("applications/<uuid:pk>/",         AdminApplicationUpdateView.as_view(),  name="admin_application_detail"),
+
+    # ------------------------------------------------------------------
+    # Waivers
+    # GET /api/v1/admin/waivers/signed/
+    # GET /api/v1/admin/waivers/unsigned/
+    # ------------------------------------------------------------------
+    path("waivers/signed/",                 AdminWaiverSignedListView.as_view(),   name="admin_waiver_signed"),
+    path("waivers/unsigned/",               AdminWaiverUnsignedListView.as_view(), name="admin_waiver_unsigned"),
 ]
 # fmt: on
