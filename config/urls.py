@@ -40,10 +40,19 @@ urlpatterns = [
     path(f"{API_V1}applications/", include("apps.applications.urls", namespace="applications")),
 
     # -------------------------------------------------------------------------
+    # Waivers  — player/captain sign + read own waiver
+    # GET  /api/v1/waivers/me/
+    # POST /api/v1/waivers/me/
+    # -------------------------------------------------------------------------
+    path(f"{API_V1}waivers/", include("apps.waivers.urls", namespace="waivers")),
+
+    # -------------------------------------------------------------------------
     # Admin dashboard  — all admin-facing endpoints in one namespace
     # GET   /api/v1/admin/users/
     # GET   /api/v1/admin/applications/
     # PATCH /api/v1/admin/applications/{id}/
+    # GET   /api/v1/admin/waivers/signed/
+    # GET   /api/v1/admin/waivers/unsigned/
     # -------------------------------------------------------------------------
     path(f"{API_V1}admin/", include(("config.admin_urls", "api_admin"))),
 ]

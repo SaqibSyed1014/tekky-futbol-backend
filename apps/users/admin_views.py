@@ -45,7 +45,7 @@ def _build_user_queryset(query_params):
     """
     qs = (
         User.objects
-        .select_related("profile__team")
+        .select_related("profile__team", "waiver_signature")
         .order_by(_DEFAULT_ORDERING)
     )
 
