@@ -134,7 +134,8 @@ class PlayerProfileSerializer(serializers.ModelSerializer):
 
 class PlayerProfileUpdateSerializer(serializers.ModelSerializer):
     """
-    Input for PATCH /players/me — players can edit their own descriptive fields.
+    Input for PATCH /users/profile/me/ — players/captains can edit their own
+    descriptive fields.
 
     status, team, and user are intentionally excluded:
     - status transitions go through PlayerService.
@@ -147,6 +148,8 @@ class PlayerProfileUpdateSerializer(serializers.ModelSerializer):
             "position",
             "bio",
             "date_of_birth",
+            "preferred_division",
+            "instagram",
         ]
 
     def validate_date_of_birth(self, value):
@@ -157,6 +160,29 @@ class PlayerProfileUpdateSerializer(serializers.ModelSerializer):
                 "Date of birth must be in the past."
             )
         return value
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    """
+    Input for PATCH /users/me/ — players/captains can update their own
+    personal fields.
+
+    email, role, is_captain, is_active, and is_staff are intentionally
+    excluded (admin-only or system-managed fields).
+    """
+
+    class Meta:
+        model = User
+        fields = ["name", "phone", "gender"]
+
+    def validate_name(self, value: str) -> str:
+        v = value.strip()
+        if len(v) < 2:
+            raise serializers.ValidationError("Name must be at least 2 characters.")
+        return v
+
+    def validate_phone(self, value: str) -> str:
+        return value.strip()
 
 
 # ---------------------------------------------------------------------------
