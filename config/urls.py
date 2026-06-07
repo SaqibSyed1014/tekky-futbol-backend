@@ -47,6 +47,14 @@ urlpatterns = [
     path(f"{API_V1}waivers/", include("apps.waivers.urls", namespace="waivers")),
 
     # -------------------------------------------------------------------------
+    # Kits  — captain selects/locks kit; all team members submit sizes
+    # PATCH /api/v1/kits/my/
+    # POST  /api/v1/kits/my/lock/
+    # GET/POST/PATCH /api/v1/kits/my/order/
+    # -------------------------------------------------------------------------
+    path(f"{API_V1}kits/", include("apps.kits.urls", namespace="kits")),
+
+    # -------------------------------------------------------------------------
     # Admin dashboard  — all admin-facing endpoints in one namespace
     # GET   /api/v1/admin/users/
     # GET   /api/v1/admin/applications/
