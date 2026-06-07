@@ -8,6 +8,7 @@ reverse-proxy level by matching a single path prefix.
 from django.urls import path
 
 from apps.applications.views import AdminApplicationListView, AdminApplicationUpdateView
+from apps.kits.views import AdminKitExportView, AdminKitListView
 from apps.teams.views import AdminMembershipActionView, AdminMembershipListView, AdminTeamListView
 from apps.users.admin_views import AdminUserListView
 from apps.waivers.views import AdminWaiverDetailView, AdminWaiverSignedListView, AdminWaiverUnsignedListView
@@ -50,5 +51,13 @@ urlpatterns = [
     path("waivers/signed/",                 AdminWaiverSignedListView.as_view(),   name="admin_waiver_signed"),
     path("waivers/unsigned/",               AdminWaiverUnsignedListView.as_view(), name="admin_waiver_unsigned"),
     path("waivers/<uuid:user_id>/",         AdminWaiverDetailView.as_view(),       name="admin_waiver_detail"),
+
+    # ------------------------------------------------------------------
+    # Kits
+    # GET /api/v1/admin/kits/          — all team kit selections + orders
+    # GET /api/v1/admin/kits/export/   — CSV download
+    # ------------------------------------------------------------------
+    path("kits/",                           AdminKitListView.as_view(),            name="admin_kit_list"),
+    path("kits/export/",                    AdminKitExportView.as_view(),          name="admin_kit_export"),
 ]
 # fmt: on
