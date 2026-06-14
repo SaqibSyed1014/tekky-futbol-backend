@@ -11,6 +11,12 @@ from apps.applications.views import AdminApplicationListView, AdminApplicationUp
 from apps.kits.views import AdminKitExportView, AdminKitListView
 from apps.teams.views import AdminMembershipActionView, AdminMembershipListView, AdminTeamListView
 from apps.users.admin_views import AdminUserListView
+from apps.users.profile_views import (
+    AdminPlayerListView,
+    AdminPlayerStatsUpdateView,
+    AdminProfileLinkReviewView,
+    AdminTeamLinkReviewView,
+)
 from apps.waivers.views import AdminWaiverDetailView, AdminWaiverSignedListView, AdminWaiverUnsignedListView
 
 # fmt: off
@@ -59,5 +65,17 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path("kits/",                           AdminKitListView.as_view(),            name="admin_kit_list"),
     path("kits/export/",                    AdminKitExportView.as_view(),          name="admin_kit_export"),
+
+    # ------------------------------------------------------------------
+    # Players — stats management + profile link review
+    # GET   /api/v1/admin/players/
+    # PATCH /api/v1/admin/players/{user_id}/stats/
+    # PATCH /api/v1/admin/players/{user_id}/profile-link/
+    # PATCH /api/v1/admin/teams/{team_id}/team-link/
+    # ------------------------------------------------------------------
+    path("players/",                              AdminPlayerListView.as_view(),           name="admin_player_list"),
+    path("players/<uuid:user_id>/stats/",         AdminPlayerStatsUpdateView.as_view(),    name="admin_player_stats"),
+    path("players/<uuid:user_id>/profile-link/",  AdminProfileLinkReviewView.as_view(),    name="admin_profile_link_review"),
+    path("teams/<uuid:team_id>/team-link/",       AdminTeamLinkReviewView.as_view(),       name="admin_team_link_review"),
 ]
 # fmt: on

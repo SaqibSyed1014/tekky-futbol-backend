@@ -55,6 +55,12 @@ urlpatterns = [
     path(f"{API_V1}kits/", include("apps.kits.urls", namespace="kits")),
 
     # -------------------------------------------------------------------------
+    # Public player profiles  — no auth required
+    # GET /api/v1/profiles/<user_id>/
+    # -------------------------------------------------------------------------
+    path(f"{API_V1}profiles/<uuid:user_id>/", __import__("apps.users.profile_views", fromlist=["PublicProfileView"]).PublicProfileView.as_view(), name="public_profile"),
+
+    # -------------------------------------------------------------------------
     # Admin dashboard  — all admin-facing endpoints in one namespace
     # GET   /api/v1/admin/users/
     # GET   /api/v1/admin/applications/
