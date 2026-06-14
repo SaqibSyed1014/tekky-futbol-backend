@@ -59,15 +59,21 @@ class User(AbstractBaseUser, PermissionsMixin):
 class PlayerProfile(models.Model):
     """
     Extended profile for role=player users.
-    Tracks team membership and player lifecycle status.
+    Tracks team membership, player lifecycle status, stats, and public profile.
     OneToOne with User — created when a user registers as a player.
     """
 
     class Status(models.TextChoices):
-        ACTIVE = "active", "Active"
+        ACTIVE     = "active",     "Active"
         FREE_AGENT = "free_agent", "Free Agent"
-        INACTIVE = "inactive", "Inactive"
-        SUSPENDED = "suspended", "Suspended"
+        INACTIVE   = "inactive",   "Inactive"
+        SUSPENDED  = "suspended",  "Suspended"
+
+    class LinkStatus(models.TextChoices):
+        NONE     = "none",     "None"
+        PENDING  = "pending",  "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(
@@ -99,13 +105,47 @@ class PlayerProfile(models.Model):
     )
     instagram = models.CharField(max_length=100, blank=True, default="")
     date_of_birth = models.DateField(null=True, blank=True)
+
+    # ── Public profile flag ───────────────────────────────────────────────────
+    # Set to True automatically when admin approves the player's team membership.
+    is_public = models.BooleanField(default=False, db_index=True)
+
+    # ── Optional personal profile link (submitted by player, approved by admin) ─
+    profile_link        = models.URLField(null=True, blank=True)
+    profile_link_status = models.CharField(
+        max_length=10,
+        choices=LinkStatus.choices,
+        default=LinkStatus.NONE,
+        db_index=True,
+    )
+
+    # ── Stats (set by admin) ──────────────────────────────────────────────────
+    goals         = models.PositiveIntegerField(default=0)
+    assists       = models.PositiveIntegerField(default=0)
+    matches_played = models.PositiveIntegerField(default=0)
+    mvps          = models.PositiveIntegerField(default=0)
+
+    # ── Upcoming match (set by admin) ─────────────────────────────────────────
+    upcoming_opponent = models.CharField(max_length=100, blank=True, default="")
+    upcoming_date     = models.DateField(null=True, blank=True)
+    upcoming_kickoff  = models.CharField(max_length=20,  blank=True, default="")  # e.g. "7:00 PM"
+    upcoming_location = models.CharField(max_length=200, blank=True, default="")
+
+    # ── Team standing (set by admin) ──────────────────────────────────────────
+    team_rank            = models.PositiveSmallIntegerField(null=True, blank=True)
+    team_wins            = models.PositiveSmallIntegerField(default=0)
+    team_losses          = models.PositiveSmallIntegerField(default=0)
+    team_draws           = models.PositiveSmallIntegerField(default=0)
+    team_goal_difference = models.SmallIntegerField(default=0)  # can be negative
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "player_profiles"
         indexes = [
-            models.Index(fields=["team", "status"], name="playerprofile_team_status_idx"),
+            models.Index(fields=["team", "status"],  name="playerprofile_team_status_idx"),
+            models.Index(fields=["is_public"],        name="playerprofile_is_public_idx"),
         ]
         constraints = [
             models.CheckConstraint(

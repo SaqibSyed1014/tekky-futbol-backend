@@ -16,6 +16,12 @@ class Team(models.Model):
         FORMING  = "forming",  "Forming"
         OFFICIAL = "official", "Official"
 
+    class LinkStatus(models.TextChoices):
+        NONE     = "none",     "None"
+        PENDING  = "pending",  "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name       = models.CharField(max_length=100, unique=True)
     slug       = models.SlugField(max_length=120, unique=True, db_index=True)
@@ -32,6 +38,14 @@ class Team(models.Model):
         max_length=10,
         choices=Status.choices,
         default=Status.FORMING,
+        db_index=True,
+    )
+    # ── Optional team link (submitted by captain, approved by admin) ──────────
+    team_link        = models.URLField(null=True, blank=True)
+    team_link_status = models.CharField(
+        max_length=10,
+        choices=LinkStatus.choices,
+        default=LinkStatus.NONE,
         db_index=True,
     )
     is_active   = models.BooleanField(default=True, db_index=True)

@@ -828,11 +828,12 @@ class InviteService:
 
     @staticmethod
     def _sync_player_profile(user: User, team: Team) -> None:
-        """Set PlayerProfile.team and status=ACTIVE after a successful join."""
+        """Set PlayerProfile.team, status=ACTIVE, and is_public=True after a successful join."""
         try:
             profile = user.profile
             profile.team = team
             profile.status = PlayerProfile.Status.ACTIVE
-            profile.save(update_fields=["team", "status", "updated_at"])
+            profile.is_public = True
+            profile.save(update_fields=["team", "status", "is_public", "updated_at"])
         except PlayerProfile.DoesNotExist:
             logger.warning("No PlayerProfile for user %s — skipping profile sync", user.id)

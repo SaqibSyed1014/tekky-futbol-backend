@@ -110,8 +110,9 @@ class PlayerProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     # Expose team as a UUID on read; views that need the full Team object
     # can use the dedicated TeamSerializer there.
-    team_id = serializers.UUIDField(source="team.id", read_only=True, allow_null=True)
+    team_id   = serializers.UUIDField(source="team.id",   read_only=True, allow_null=True)
     team_name = serializers.CharField(source="team.name", read_only=True, allow_null=True)
+    team_slug = serializers.SlugField(source="team.slug", read_only=True, allow_null=True)
 
     class Meta:
         model = PlayerProfile
@@ -120,8 +121,12 @@ class PlayerProfileSerializer(serializers.ModelSerializer):
             "user",
             "team_id",
             "team_name",
+            "team_slug",
             "position",
             "status",
+            "is_public",
+            "profile_link",
+            "profile_link_status",
             "bio",
             "preferred_division",
             "instagram",
