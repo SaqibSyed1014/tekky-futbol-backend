@@ -40,21 +40,22 @@ from rest_framework import serializers
 class PublicProfileSerializer(serializers.ModelSerializer):
     """Full public-facing player profile."""
 
-    name       = serializers.CharField(source="user.name",  read_only=True)
-    email      = serializers.EmailField(source="user.email", read_only=True)
-    user_id    = serializers.UUIDField(source="user.id",    read_only=True)
-    is_captain = serializers.BooleanField(source="user.is_captain", read_only=True)
-    team_name  = serializers.SerializerMethodField()
-    team_link  = serializers.SerializerMethodField()
-    kit_slug   = serializers.SerializerMethodField()
-    profile_link = serializers.SerializerMethodField()  # only if approved
+    name         = serializers.CharField(source="user.name",       read_only=True)
+    email        = serializers.EmailField(source="user.email",      read_only=True)
+    user_id      = serializers.UUIDField(source="user.id",         read_only=True)
+    is_captain   = serializers.BooleanField(source="user.is_captain", read_only=True)
+    team_name    = serializers.SerializerMethodField()
+    team_link    = serializers.SerializerMethodField()
+    kit_slug     = serializers.SerializerMethodField()
+    number_on_kit = serializers.SerializerMethodField()  # jersey number from kit order
+    profile_link = serializers.SerializerMethodField()   # only if approved
 
     class Meta:
         model = PlayerProfile
         fields = [
             "user_id", "name", "email", "is_captain",
-            "position", "bio", "instagram", "preferred_division",
-            "team_name", "team_link", "kit_slug",
+            "bio", "instagram", "preferred_division",
+            "team_name", "team_link", "kit_slug", "number_on_kit",
             # Stats
             "goals", "assists", "matches_played", "mvps",
             # Upcoming match
@@ -83,6 +84,16 @@ class PublicProfileSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
         return None
+
+    def get_number_on_kit(self, obj):
+        if not obj.team:
+            return None
+        from apps.kits.models import KitOrder
+        try:
+            order = KitOrder.objects.get(team=obj.team, user=obj.user)
+            return order.number_on_kit
+        except KitOrder.DoesNotExist:
+            return None
 
     def get_profile_link(self, obj):
         if obj.profile_link_status == "approved":
@@ -293,7 +304,7 @@ class AdminPlayerListView(APIView):
         qs = (
             PlayerProfile.objects
             .select_related("user", "team")
-            .filter(user__role="player")
+            .filter(user__role="player", user__is_captain=False)
             .order_by("user__name", "user__email")
         )
 
