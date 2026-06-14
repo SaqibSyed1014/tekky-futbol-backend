@@ -61,6 +61,12 @@ urlpatterns = [
     path(f"{API_V1}profiles/<uuid:user_id>/", __import__("apps.users.profile_views", fromlist=["PublicProfileView"]).PublicProfileView.as_view(), name="public_profile"),
 
     # -------------------------------------------------------------------------
+    # Public team profiles  — no auth required
+    # GET /api/v1/teams/public/<slug>/
+    # -------------------------------------------------------------------------
+    path(f"{API_V1}teams/public/<slug:slug>/", __import__("apps.users.profile_views", fromlist=["PublicTeamProfileView"]).PublicTeamProfileView.as_view(), name="public_team_profile"),
+
+    # -------------------------------------------------------------------------
     # Admin dashboard  — all admin-facing endpoints in one namespace
     # GET   /api/v1/admin/users/
     # GET   /api/v1/admin/applications/

@@ -3,7 +3,9 @@ Milestone 8 — Public profile + stats + link management views.
 
 Endpoints defined here:
   GET  /api/v1/profiles/<user_id>/              — public player profile (no auth)
+  GET  /api/v1/teams/public/<slug>/             — public team profile (no auth)
   POST /api/v1/users/profile/me/link/           — player submits/clears profile link
+  POST /api/v1/users/team/link/                 — captain submits/clears team link
   GET  /api/v1/admin/players/                   — admin: all players with stats + link status
   PATCH /api/v1/admin/players/<user_id>/stats/  — admin: edit player stats
   PATCH /api/v1/admin/players/<user_id>/profile-link/ — admin: approve/reject profile link
@@ -435,3 +437,81 @@ class AdminTeamLinkReviewView(APIView):
             "team_link": team.team_link,
             "team_link_status": team.team_link_status,
         })
+
+
+# ---------------------------------------------------------------------------
+# Public team profile
+# ---------------------------------------------------------------------------
+
+class PublicTeamProfileView(APIView):
+    """
+    GET /api/v1/teams/public/<slug>/
+
+    Returns a team's public profile. No authentication required.
+    Includes roster of approved players whose profiles are public,
+    the locked kit slug (if selected), and the approved team link.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug):
+        from apps.teams.models import Team, TeamMembership
+        from apps.kits.models import KitOrder
+
+        try:
+            team = (
+                Team.objects
+                .select_related("captain")
+                .get(slug=slug, is_active=True)
+            )
+        except Team.DoesNotExist:
+            return Response({"detail": "Team not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Approved public roster members
+        memberships = (
+            TeamMembership.objects
+            .filter(team=team, status=TeamMembership.Status.APPROVED)
+            .select_related("user__profile")
+        )
+
+        # Kit orders keyed by user_id for jersey number lookup
+        kit_orders = {
+            str(ko.user_id): ko
+            for ko in KitOrder.objects.filter(team=team)
+        }
+
+        roster = []
+        for m in memberships:
+            profile = getattr(m.user, "profile", None)
+            if not profile or not profile.is_public:
+                continue
+            ko = kit_orders.get(str(m.user_id))
+            roster.append({
+                "user_id":      str(m.user.id),
+                "name":         m.user.name or "",
+                "position":     profile.position or "",
+                "number_on_kit": ko.number_on_kit if ko else None,
+            })
+
+        # Kit slug — only if captain has locked
+        kit_slug = None
+        try:
+            sel = team.kit_selection
+            if sel.is_locked:
+                kit_slug = sel.kit_slug
+        except Exception:
+            pass
+
+        data = {
+            "name":         team.name,
+            "slug":         team.slug,
+            "description":  team.description or "",
+            "logo_url":     team.logo_url,
+            "status":       team.status,
+            "captain_name":    team.captain.name or team.captain.email,
+            "captain_user_id": str(team.captain.id),
+            "team_link": team.team_link if team.team_link_status == "approved" else None,
+            "kit_slug":  kit_slug,
+            "roster":    roster,
+        }
+
+        return Response(data)
