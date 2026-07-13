@@ -160,7 +160,7 @@ class MeView(APIView):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         return (
-            User.objects.select_related("profile__team", "waiver_signature")
+            User.objects.select_related("profile__team", "waiver_signature", "payment")
             .get(pk=pk)
         )
 
@@ -196,7 +196,7 @@ class UserMeView(APIView):
 
         User = get_user_model()
         user = (
-            User.objects.select_related("profile__team", "waiver_signature")
+            User.objects.select_related("profile__team", "waiver_signature", "payment")
             .get(pk=request.user.pk)
         )
         self.check_object_permissions(request, user)
@@ -279,7 +279,7 @@ class UpdateUserView(APIView):
         User = get_user_model()
 
         user = (
-            User.objects.select_related("profile__team", "waiver_signature")
+            User.objects.select_related("profile__team", "waiver_signature", "payment")
             .get(pk=request.user.pk)
         )
         serializer = UserUpdateSerializer(user, data=request.data, partial=True)
@@ -288,7 +288,7 @@ class UpdateUserView(APIView):
 
         user.refresh_from_db()
         user = (
-            User.objects.select_related("profile__team", "waiver_signature")
+            User.objects.select_related("profile__team", "waiver_signature", "payment")
             .get(pk=user.pk)
         )
         return Response(UserDetailSerializer(user).data, status=status.HTTP_200_OK)
@@ -327,7 +327,7 @@ class UpdatePlayerProfileView(APIView):
         serializer.save()
 
         user = (
-            User.objects.select_related("profile__team", "waiver_signature")
+            User.objects.select_related("profile__team", "waiver_signature", "payment")
             .get(pk=request.user.pk)
         )
         return Response(UserDetailSerializer(user).data, status=status.HTTP_200_OK)
