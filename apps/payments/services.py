@@ -25,8 +25,8 @@ from django.conf import settings
 
 
 # ── HPP endpoint ──────────────────────────────────────────────────────────────
-HPP_TEST_URL = "https://testsecureacceptance.cybersource.com/pay"
-HPP_PROD_URL = "https://secureacceptance.cybersource.com/pay"
+HPP_TEST_URL = "https://testsecureacceptance.merchant-services.bankofamerica.com/pay"
+HPP_PROD_URL = "https://secureacceptance.merchant-services.bankofamerica.com/pay"
 
 
 def _get_hpp_url():
@@ -71,26 +71,26 @@ def build_hpp_form(reference_number: str, amount: str = "700.00") -> dict:
         "reference_number",
         "amount",
         "currency",
-        "override_custom_receipt_page_url",
-        "override_custom_cancel_page_url",
+        "override_custom_receipt_page",
+        "override_custom_cancel_page",
         "override_backoffice_post_url",
     ]
 
     params = {
-        "access_key":                         access_key,
-        "profile_id":                         profile_id,
-        "transaction_uuid":                   transaction_uuid,
-        "signed_field_names":                 ",".join(signed_fields),
-        "unsigned_field_names":               "",
-        "signed_date_time":                   signed_date_time,
-        "locale":                             "en-us",
-        "transaction_type":                   "sale",
-        "reference_number":                   reference_number,
-        "amount":                             amount,
-        "currency":                           "USD",
-        "override_custom_receipt_page_url":   f"{frontend}/payment/success",
-        "override_custom_cancel_page_url":    f"{frontend}/payment/failed",
-        "override_backoffice_post_url":       f"{backend}/api/v1/payments/callback/",
+        "access_key":                    access_key,
+        "profile_id":                    profile_id,
+        "transaction_uuid":              transaction_uuid,
+        "signed_field_names":            ",".join(signed_fields),
+        "unsigned_field_names":          "",
+        "signed_date_time":              signed_date_time,
+        "locale":                        "en-us",
+        "transaction_type":              "sale",
+        "reference_number":              reference_number,
+        "amount":                        amount,
+        "currency":                      "USD",
+        "override_custom_receipt_page":  f"{frontend}/payment/success",
+        "override_custom_cancel_page":   f"{frontend}/payment/failed",
+        "override_backoffice_post_url":  f"{backend}/api/v1/payments/callback/",
     }
 
     params["signature"] = _sign(params, secret_key)
