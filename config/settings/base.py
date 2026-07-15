@@ -39,6 +39,7 @@ LOCAL_APPS = [
     "apps.applications",
     "apps.waivers",
     "apps.kits",
+    "apps.payments",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -165,6 +166,16 @@ STORAGES = {
 # ---------------------------------------------------------------------------
 DEFAULT_FROM_EMAIL  = config("DEFAULT_FROM_EMAIL",  default="noreply@tekkyfutbol.com")
 FRONTEND_BASE_URL   = config("FRONTEND_BASE_URL",   default="https://tekkyfutbol.net")
+BACKEND_BASE_URL    = config("BACKEND_BASE_URL",    default="http://localhost:8000")
+
+# ---------------------------------------------------------------------------
+# Bank of America Hosted Payments Page (Secure Acceptance)
+# ---------------------------------------------------------------------------
+BOA_ACCESS_KEY  = config("BOA_ACCESS_KEY",  default="")
+BOA_SECRET_KEY  = config("BOA_SECRET_KEY",  default="")
+BOA_MERCHANT_ID = config("BOA_MERCHANT_ID", default="")
+BOA_PROFILE_ID  = config("BOA_PROFILE_ID",  default="")  # defaults to BOA_ACCESS_KEY in services.py
+BOA_TEST_MODE   = config("BOA_TEST_MODE",   default=True, cast=bool)
 EMAIL_BACKEND = (
     "django_ses.SESBackend"
     if _s3_configured  # SES uses the same IAM credentials as S3

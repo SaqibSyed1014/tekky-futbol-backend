@@ -67,6 +67,14 @@ urlpatterns = [
     path(f"{API_V1}teams/public/<slug:slug>/", __import__("apps.users.profile_views", fromlist=["PublicTeamProfileView"]).PublicTeamProfileView.as_view(), name="public_team_profile"),
 
     # -------------------------------------------------------------------------
+    # Payments  — player/captain initiate + status, BoA callback
+    # GET  /api/v1/payments/initiate/
+    # GET  /api/v1/payments/me/
+    # POST /api/v1/payments/callback/
+    # -------------------------------------------------------------------------
+    path(f"{API_V1}payments/", include("apps.payments.urls", namespace="payments")),
+
+    # -------------------------------------------------------------------------
     # Admin dashboard  — all admin-facing endpoints in one namespace
     # GET   /api/v1/admin/users/
     # GET   /api/v1/admin/applications/

@@ -9,6 +9,7 @@ from django.urls import path
 
 from apps.applications.views import AdminApplicationListView, AdminApplicationUpdateView
 from apps.kits.views import AdminKitExportView, AdminKitListView
+from apps.payments.views import AdminPaymentListView
 from apps.teams.views import AdminMembershipActionView, AdminMembershipListView, AdminTeamListView
 from apps.users.admin_views import AdminUserListView
 from apps.users.profile_views import (
@@ -73,6 +74,12 @@ urlpatterns = [
     # PATCH /api/v1/admin/players/{user_id}/profile-link/
     # PATCH /api/v1/admin/teams/{team_id}/team-link/
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Payments
+    # GET /api/v1/admin/payments/
+    # ------------------------------------------------------------------
+    path("payments/",                              AdminPaymentListView.as_view(),          name="admin_payment_list"),
+
     path("players/",                              AdminPlayerListView.as_view(),           name="admin_player_list"),
     path("players/<uuid:user_id>/stats/",         AdminPlayerStatsUpdateView.as_view(),    name="admin_player_stats"),
     path("players/<uuid:user_id>/profile-link/",  AdminProfileLinkReviewView.as_view(),    name="admin_profile_link_review"),

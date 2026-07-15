@@ -207,8 +207,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
     without an extra round-trip after login.
     """
 
-    profile       = PlayerProfileSerializer(read_only=True)
-    waiver_signed = serializers.SerializerMethodField()
+    profile        = PlayerProfileSerializer(read_only=True)
+    waiver_signed  = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -223,6 +224,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "is_active",
             "profile",
             "waiver_signed",
+            "payment_status",
             "created_at",
             "updated_at",
         ]
@@ -230,6 +232,12 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
     def get_waiver_signed(self, obj) -> bool:
         return hasattr(obj, "waiver_signature")
+
+    def get_payment_status(self, obj) -> str | None:
+        try:
+            return obj.payment.status
+        except Exception:
+            return None
 
 
 # ---------------------------------------------------------------------------
