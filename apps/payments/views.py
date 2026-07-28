@@ -1,10 +1,10 @@
 import logging
 
+import stripe
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework import status
-from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,7 +14,7 @@ from apps.core.pagination import StandardResultsPagination
 
 from .models import Payment
 from .serializers import AdminPaymentSerializer, PaymentStatusSerializer
-from .services import build_hpp_form, verify_callback
+from .services import create_checkout_session, verify_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +23,8 @@ class InitiatePaymentView(APIView):
     """
     GET /api/v1/payments/initiate/
 
-    Returns signed form fields for the BoA Hosted Payments Page.
-    The frontend auto-POSTs these to the HPP URL.
-
-    Rules:
-    - User must have signed the waiver.
-    - If already PAID → 400.
-    - If no record or FAILED/CANCELLED → (re)create/reset to PENDING and return form.
-    - If PENDING → return fresh form fields (allow retry).
+    Creates a Stripe Checkout Session and returns the hosted checkout URL.
+    The frontend redirects the customer to that URL to complete payment.
     """
     permission_classes = [IsAuthenticated]
 
@@ -66,11 +60,19 @@ class InitiatePaymentView(APIView):
             payment.status = Payment.Status.PENDING
             payment.save(update_fields=["status", "updated_at"])
 
-        form_data = build_hpp_form(
-            reference_number=payment.reference_number,
-            amount=str(payment.amount),
-        )
-        return Response(form_data)
+        try:
+            checkout_url = create_checkout_session(
+                reference_number=payment.reference_number,
+                amount=str(payment.amount),
+            )
+        except stripe.error.StripeError as e:
+            logger.error("Stripe error creating checkout session: %s", e)
+            return Response(
+                {"detail": "Payment service unavailable. Please try again later."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({"checkout_url": checkout_url})
 
 
 class MyPaymentView(APIView):
@@ -93,48 +95,62 @@ class PaymentCallbackView(APIView):
     """
     POST /api/v1/payments/callback/
 
-    Server-to-server notification from BoA after payment processing.
-    No auth — BoA posts directly from their servers.
-    We verify the HMAC-SHA256 signature before updating the record.
+    Stripe webhook endpoint. Stripe POSTs signed events here after payment.
+    We verify the signature using the raw request body before processing.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
-    parser_classes = [FormParser, MultiPartParser]
 
     def post(self, request):
-        data = request.data
+        payload    = request.body
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
 
-        if not verify_callback(data):
-            logger.warning("BoA callback received with invalid signature")
+        try:
+            event = verify_webhook(payload, sig_header)
+        except (ValueError, stripe.error.SignatureVerificationError):
+            logger.warning("Stripe webhook received with invalid signature")
             return Response({"detail": "Invalid signature."}, status=status.HTTP_400_BAD_REQUEST)
 
-        reference_number = data.get("req_reference_number") or data.get("reference_number")
-        decision         = data.get("decision", "").upper()
-        transaction_id   = data.get("transaction_id", "")
-        reason_code      = data.get("reason_code", "")
+        event_type = event["type"]
+        session    = event["data"]["object"]
 
-        logger.info(
-            "BoA callback: ref=%s decision=%s reason=%s txn=%s",
-            reference_number, decision, reason_code, transaction_id,
-        )
+        logger.info("Stripe webhook: type=%s session=%s", event_type, session.get("id"))
+
+        if event_type == "checkout.session.completed":
+            self._handle_completed(session)
+        elif event_type == "checkout.session.expired":
+            self._handle_expired(session)
+
+        return Response({"detail": "OK"})
+
+    def _handle_completed(self, session):
+        reference_number = session.get("client_reference_id")
+        transaction_id   = session.get("id")
 
         try:
             payment = Payment.objects.get(reference_number=reference_number)
         except Payment.DoesNotExist:
-            logger.error("BoA callback: no payment found for ref=%s", reference_number)
-            return Response({"detail": "Payment record not found."}, status=status.HTTP_404_NOT_FOUND)
+            logger.error("Stripe webhook: no payment found for ref=%s", reference_number)
+            return
 
-        if decision == "ACCEPT":
-            payment.status         = Payment.Status.PAID
-            payment.transaction_id = transaction_id
-            payment.paid_at        = timezone.now()
-        elif decision == "CANCEL":
-            payment.status = Payment.Status.CANCELLED
-        else:
-            payment.status = Payment.Status.FAILED
-
+        payment.status         = Payment.Status.PAID
+        payment.transaction_id = transaction_id
+        payment.paid_at        = timezone.now()
         payment.save(update_fields=["status", "transaction_id", "paid_at", "updated_at"])
-        return Response({"detail": "OK"})
+        logger.info("Payment marked paid: ref=%s txn=%s", reference_number, transaction_id)
+
+    def _handle_expired(self, session):
+        reference_number = session.get("client_reference_id")
+
+        try:
+            payment = Payment.objects.get(reference_number=reference_number)
+        except Payment.DoesNotExist:
+            return
+
+        if payment.status == Payment.Status.PENDING:
+            payment.status = Payment.Status.CANCELLED
+            payment.save(update_fields=["status", "updated_at"])
+            logger.info("Payment marked cancelled (expired): ref=%s", reference_number)
 
 
 class AdminPaymentListView(APIView):
