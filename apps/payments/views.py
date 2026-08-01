@@ -114,7 +114,7 @@ class PaymentCallbackView(APIView):
         event_type = event["type"]
         session    = event["data"]["object"]
 
-        logger.info("Stripe webhook: type=%s session=%s", event_type, session.get("id"))
+        logger.info("Stripe webhook: type=%s session=%s", event_type, getattr(session, "id", None))
 
         if event_type == "checkout.session.completed":
             self._handle_completed(session)
@@ -124,8 +124,8 @@ class PaymentCallbackView(APIView):
         return Response({"detail": "OK"})
 
     def _handle_completed(self, session):
-        reference_number = session.get("client_reference_id")
-        transaction_id   = session.get("id")
+        reference_number = getattr(session, "client_reference_id", None)
+        transaction_id   = getattr(session, "id", None)
 
         try:
             payment = Payment.objects.get(reference_number=reference_number)
@@ -140,7 +140,7 @@ class PaymentCallbackView(APIView):
         logger.info("Payment marked paid: ref=%s txn=%s", reference_number, transaction_id)
 
     def _handle_expired(self, session):
-        reference_number = session.get("client_reference_id")
+        reference_number = getattr(session, "client_reference_id", None)
 
         try:
             payment = Payment.objects.get(reference_number=reference_number)

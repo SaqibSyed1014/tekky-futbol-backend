@@ -166,7 +166,6 @@ STORAGES = {
 # ---------------------------------------------------------------------------
 DEFAULT_FROM_EMAIL  = config("DEFAULT_FROM_EMAIL",  default="noreply@tekkyfutbol.com")
 FRONTEND_BASE_URL   = config("FRONTEND_BASE_URL",   default="https://tekkyfutbol.net")
-BACKEND_BASE_URL    = config("BACKEND_BASE_URL",    default="http://localhost:8000")
 
 # ---------------------------------------------------------------------------
 # Stripe Payments
