@@ -116,12 +116,39 @@ class PaymentCallbackView(APIView):
 
         logger.info("Stripe webhook: type=%s session=%s", event_type, getattr(session, "id", None))
 
+        metadata     = getattr(session, "metadata", None) or {}
+        is_shop_order = metadata.get("type") == "shop_order"
+
         if event_type == "checkout.session.completed":
-            self._handle_completed(session)
+            if is_shop_order:
+                self._handle_shop_completed(session, metadata)
+            else:
+                self._handle_completed(session)
         elif event_type == "checkout.session.expired":
-            self._handle_expired(session)
+            if not is_shop_order:
+                self._handle_expired(session)
 
         return Response({"detail": "OK"})
+
+    def _handle_shop_completed(self, session, metadata):
+        from apps.shop.email_service import send_order_confirmation
+
+        customer_details = getattr(session, "customer_details", None)
+        customer_email   = getattr(customer_details, "email", None) if customer_details else None
+        customer_name    = getattr(customer_details, "name",  None) if customer_details else None
+        product_name     = metadata.get("product_name", "your order")
+        amount_cents     = getattr(session, "amount_total", 0) or 0
+
+        if not customer_email:
+            logger.warning("Shop order completed but no customer email in session %s", getattr(session, "id", None))
+            return
+
+        send_order_confirmation(
+            customer_email=customer_email,
+            customer_name=customer_name,
+            product_name=product_name,
+            amount_cents=amount_cents,
+        )
 
     def _handle_completed(self, session):
         reference_number = getattr(session, "client_reference_id", None)

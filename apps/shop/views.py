@@ -62,6 +62,10 @@ class ShopCheckoutView(APIView):
                     'quantity': 1,
                 }],
                 mode='payment',
+                metadata={
+                    'type': 'shop_order',
+                    'product_name': name,
+                },
                 success_url=f"{settings.FRONTEND_BASE_URL}/shop/order/success",
                 cancel_url=cancel_url,
             )
