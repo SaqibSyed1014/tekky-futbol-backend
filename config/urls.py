@@ -75,6 +75,12 @@ urlpatterns = [
     path(f"{API_V1}payments/", include("apps.payments.urls", namespace="payments")),
 
     # -------------------------------------------------------------------------
+    # Shop  — public, no auth required
+    # POST /api/v1/shop/checkout/
+    # -------------------------------------------------------------------------
+    path(f"{API_V1}shop/", include("apps.shop.urls", namespace="shop")),
+
+    # -------------------------------------------------------------------------
     # Admin dashboard  — all admin-facing endpoints in one namespace
     # GET   /api/v1/admin/users/
     # GET   /api/v1/admin/applications/
