@@ -23,7 +23,8 @@ class ShopCheckoutView(APIView):
         description = request.data.get('description', '').strip()
         image_url = request.data.get('image_url', '').strip()
         amount = request.data.get('amount')
-        cancel_url = (request.data.get('cancel_url', '') or '').strip()
+        cancel_url  = (request.data.get('cancel_url',  '') or '').strip()
+        return_path = (request.data.get('return_path', '') or '').strip()
 
         if not name or amount is None:
             return Response(
@@ -66,7 +67,7 @@ class ShopCheckoutView(APIView):
                     'type': 'shop_order',
                     'product_name': name,
                 },
-                success_url=f"{settings.FRONTEND_BASE_URL}/shop/order/success",
+                success_url=f"{settings.FRONTEND_BASE_URL}/shop/order/success?from={return_path or '/shop'}",
                 cancel_url=cancel_url,
             )
         except stripe.error.StripeError:
