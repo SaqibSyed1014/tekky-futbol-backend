@@ -3,7 +3,9 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import PlayerProfile, User
+from rest_framework.exceptions import AuthenticationFailed
+
+from .models import FanProfile, PlayerProfile, User
 
 # ---------------------------------------------------------------------------
 # User
@@ -74,9 +76,9 @@ class RegisterSerializer(serializers.Serializer):
         return normalised
 
     def validate_role(self, value: str) -> str:
-        if value == User.Role.ADMIN:
+        if value in (User.Role.ADMIN, User.Role.FAN):
             raise serializers.ValidationError(
-                "Admin accounts cannot be self-registered."
+                "This account type cannot be self-registered here."
             )
         return value
 
@@ -94,6 +96,141 @@ class RegisterSerializer(serializers.Serializer):
             )
         attrs.pop("password2")
         return attrs
+
+
+# ---------------------------------------------------------------------------
+# Fan registration / profile
+# ---------------------------------------------------------------------------
+
+
+class FanRegisterSerializer(serializers.Serializer):
+    """Input for POST /auth/fan/register/."""
+
+    email = serializers.EmailField(max_length=254)
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        style={"input_type": "password"},
+    )
+    password2 = serializers.CharField(
+        write_only=True,
+        style={"input_type": "password"},
+        label="Confirm password",
+    )
+    favorite_division = serializers.ChoiceField(
+        choices=FanProfile.Division.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    zip_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=5,
+    )
+
+    def validate_email(self, value: str) -> str:
+        normalised = value.strip().lower()
+        if User.objects.filter(email=normalised).exists():
+            raise serializers.ValidationError(
+                "A user with this email already exists."
+            )
+        return normalised
+
+    def validate_password(self, value: str) -> str:
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
+
+    def validate_zip_code(self, value: str) -> str:
+        v = (value or "").strip()
+        if v and (len(v) != 5 or not v.isdigit()):
+            raise serializers.ValidationError("Zip code must be 5 digits.")
+        return v
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs["password"] != attrs["password2"]:
+            raise serializers.ValidationError(
+                {"password2": "Passwords do not match."}
+            )
+        attrs.pop("password2")
+        return attrs
+
+
+class FanProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FanProfile
+        fields = [
+            "favorite_division",
+            "zip_code",
+            "shipping_address",
+            "shipping_city",
+            "shipping_state",
+            "shirt_size",
+        ]
+        read_only_fields = fields
+
+
+class FanProfileUpdateSerializer(serializers.ModelSerializer):
+    """PATCH /users/fan/me/ — name is handled separately on User."""
+
+    name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    zip_code = serializers.CharField(required=False, allow_blank=True, max_length=5)
+
+    class Meta:
+        model = FanProfile
+        fields = [
+            "name",
+            "favorite_division",
+            "zip_code",
+            "shipping_address",
+            "shipping_city",
+            "shipping_state",
+            "shirt_size",
+        ]
+
+    def validate_name(self, value: str) -> str:
+        return value.strip()
+
+    def validate_zip_code(self, value: str) -> str:
+        v = (value or "").strip()
+        if v and (len(v) != 5 or not v.isdigit()):
+            raise serializers.ValidationError("Zip code must be 5 digits.")
+        return v
+
+    def validate_favorite_division(self, value: str) -> str:
+        return value or ""
+
+    def update(self, instance, validated_data):
+        name = validated_data.pop("name", None)
+        if name is not None:
+            user = instance.user
+            user.name = name
+            user.save(update_fields=["name", "updated_at"])
+        return super().update(instance, validated_data)
+
+
+class OAuthFanSerializer(serializers.Serializer):
+    """Shared input for Google/Apple fan Sign-In."""
+
+    id_token = serializers.CharField()
+    name = serializers.CharField(required=False, allow_blank=True, default="", max_length=100)
+    favorite_division = serializers.ChoiceField(
+        choices=FanProfile.Division.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    zip_code = serializers.CharField(required=False, allow_blank=True, default="", max_length=5)
+
+    def validate_zip_code(self, value: str) -> str:
+        v = (value or "").strip()
+        if v and (len(v) != 5 or not v.isdigit()):
+            raise serializers.ValidationError("Zip code must be 5 digits.")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -208,8 +345,10 @@ class UserDetailSerializer(serializers.ModelSerializer):
     """
 
     profile        = PlayerProfileSerializer(read_only=True)
+    fan_profile    = FanProfileSerializer(read_only=True)
     waiver_signed  = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
+    has_password   = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -223,6 +362,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "is_captain",
             "is_active",
             "profile",
+            "fan_profile",
+            "has_password",
             "waiver_signed",
             "payment_status",
             "created_at",
@@ -238,6 +379,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
             return obj.payment.status
         except Exception:
             return None
+
+    def get_has_password(self, obj) -> bool:
+        return obj.has_usable_password()
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +399,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
        everything it needs immediately after login.
     """
 
+    allowed_roles = {User.Role.PLAYER, User.Role.ADMIN}
+    wrong_role_message = "Please sign in through the fan login page."
+
     @classmethod
     def get_token(cls, user: User):
         token = super().get_token(user)
@@ -266,17 +413,23 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
-        # Re-fetch with select_related so waiver_signed + profile resolve
-        # in a single extra query rather than multiple lazy loads.
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        user = User.objects.select_related(
-            "profile__team", "waiver_signature"
-        ).get(pk=self.user.pk)
+        if self.user.role not in self.allowed_roles:
+            raise AuthenticationFailed(self.wrong_role_message)
+
+        from .services import USER_DETAIL_RELATIONS
+
+        user = User.objects.select_related(*USER_DETAIL_RELATIONS).get(pk=self.user.pk)
         data["user"] = UserDetailSerializer(user).data
         # 'token' alias so the frontend can do auth.setToken(data.token)
         data["token"] = data["access"]
         return data
+
+
+class FanTokenObtainPairSerializer(CustomTokenObtainPairSerializer):
+    """Player/admin accounts cannot use the fan login endpoint."""
+
+    allowed_roles = {User.Role.FAN}
+    wrong_role_message = "Please sign in through the player login page."
 
 
 # ---------------------------------------------------------------------------

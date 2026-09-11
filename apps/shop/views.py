@@ -1,9 +1,14 @@
 import stripe
 from django.conf import settings
+from django.db.models import Q
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+from .models import ShopOrder
+from .serializers import ShopOrderSerializer
 
 
 def _parse_amount_cents(amount):
@@ -84,7 +89,7 @@ class ShopCheckoutView(APIView):
     need to exist in the dashboard.
     """
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = [JWTAuthentication]
 
     def post(self, request):
         cancel_url = (request.data.get('cancel_url', '') or '').strip()
@@ -121,15 +126,20 @@ class ShopCheckoutView(APIView):
 
         stripe.api_key = settings.STRIPE_SECRET_KEY
 
+        metadata = {
+            "type": "shop_order",
+            "product_name": product_name,
+        }
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated:
+            metadata["user_id"] = str(user.id)
+
         try:
             session = stripe.checkout.Session.create(
                 payment_method_types=['card'],
                 line_items=line_items,
                 mode='payment',
-                metadata={
-                    'type': 'shop_order',
-                    'product_name': product_name,
-                },
+                metadata=metadata,
                 success_url=f"{settings.FRONTEND_BASE_URL}/shop/order/success?from={return_path or '/shop'}",
                 cancel_url=cancel_url,
             )
@@ -140,3 +150,16 @@ class ShopCheckoutView(APIView):
             )
 
         return Response({'checkout_url': session.url})
+
+
+class ShopOrderListView(APIView):
+    """GET /api/v1/shop/orders/ — the authenticated user's shop order history."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        qs = ShopOrder.objects.filter(
+            Q(user=user) | Q(user__isnull=True, email__iexact=user.email)
+        ).order_by("-created_at")
+        return Response(ShopOrderSerializer(qs, many=True).data)

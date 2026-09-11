@@ -85,6 +85,21 @@ class IsOwner(BasePermission):
         return False
 
 
+class IsFan(BasePermission):
+    """
+    Grants access only to authenticated users with role='fan'.
+    """
+
+    message = "You must have a fan account to perform this action."
+
+    def has_permission(self, request, view) -> bool:
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == "fan"
+        )
+
+
 class IsCaptain(BasePermission):
     """
     Grants access only to authenticated players who are captains of a team.

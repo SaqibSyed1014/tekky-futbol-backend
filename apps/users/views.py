@@ -8,6 +8,7 @@ from django.core.mail import send_mail
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import status
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -16,16 +17,21 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from apps.core.permissions import IsOwner
+from apps.core.permissions import IsFan, IsOwner
 
+from .oauth import verify_apple_token, verify_google_token
 from .serializers import (
     CustomTokenObtainPairSerializer,
+    FanProfileUpdateSerializer,
+    FanRegisterSerializer,
+    FanTokenObtainPairSerializer,
+    OAuthFanSerializer,
     PlayerProfileUpdateSerializer,
     RegisterSerializer,
     UserDetailSerializer,
     UserUpdateSerializer,
 )
-from .services import UserService
+from .services import USER_DETAIL_RELATIONS, UserService
 
 logger = logging.getLogger(__name__)
 
@@ -62,18 +68,10 @@ class RegisterView(APIView):
             role=serializer.validated_data.get("role", "player"),
         )
 
-        refresh = RefreshToken.for_user(user)
-
         logger.info("New user registered: %s (role=%s)", user.id, user.role)
 
-        access_token = str(refresh.access_token)
         return Response(
-            {
-                "token": access_token,   # frontend alias
-                "access": access_token,
-                "refresh": str(refresh),
-                "user": UserDetailSerializer(user).data,
-            },
+            UserService.issue_auth_payload(user),
             status=status.HTTP_201_CREATED,
         )
 
@@ -160,7 +158,7 @@ class MeView(APIView):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         return (
-            User.objects.select_related("profile__team", "waiver_signature", "payment")
+            User.objects.select_related(*USER_DETAIL_RELATIONS)
             .get(pk=pk)
         )
 
@@ -196,7 +194,7 @@ class UserMeView(APIView):
 
         User = get_user_model()
         user = (
-            User.objects.select_related("profile__team", "waiver_signature", "payment")
+            User.objects.select_related(*USER_DETAIL_RELATIONS)
             .get(pk=request.user.pk)
         )
         self.check_object_permissions(request, user)
@@ -231,9 +229,15 @@ class ChangePasswordView(APIView):
         new_password     = request.data.get("new_password", "")
         confirm_password = request.data.get("confirm_password", "")
 
-        if not user.check_password(old_password):
+        if user.has_usable_password():
+            if not user.check_password(old_password):
+                return Response(
+                    {"old_password": "Current password is incorrect."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif not new_password:
             return Response(
-                {"old_password": "Current password is incorrect."},
+                {"new_password": "Enter a new password to set one for this account."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -279,7 +283,7 @@ class UpdateUserView(APIView):
         User = get_user_model()
 
         user = (
-            User.objects.select_related("profile__team", "waiver_signature", "payment")
+            User.objects.select_related(*USER_DETAIL_RELATIONS)
             .get(pk=request.user.pk)
         )
         serializer = UserUpdateSerializer(user, data=request.data, partial=True)
@@ -288,7 +292,7 @@ class UpdateUserView(APIView):
 
         user.refresh_from_db()
         user = (
-            User.objects.select_related("profile__team", "waiver_signature", "payment")
+            User.objects.select_related(*USER_DETAIL_RELATIONS)
             .get(pk=user.pk)
         )
         return Response(UserDetailSerializer(user).data, status=status.HTTP_200_OK)
@@ -327,7 +331,7 @@ class UpdatePlayerProfileView(APIView):
         serializer.save()
 
         user = (
-            User.objects.select_related("profile__team", "waiver_signature", "payment")
+            User.objects.select_related(*USER_DETAIL_RELATIONS)
             .get(pk=request.user.pk)
         )
         return Response(UserDetailSerializer(user).data, status=status.HTTP_200_OK)
@@ -509,3 +513,129 @@ class ResetPasswordView(APIView):
             {"detail": "Your password has been reset. You can now log in."},
             status=status.HTTP_200_OK,
         )
+
+
+# ---------------------------------------------------------------------------
+# Fan auth
+# ---------------------------------------------------------------------------
+
+
+class FanRegisterView(APIView):
+    """POST /auth/fan/register/ — create a fan account with email + password."""
+
+    permission_classes = [AllowAny]
+    serializer_class = FanRegisterSerializer
+
+    def post(self, request: Request) -> Response:
+        serializer = FanRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user = UserService.create_user(
+            email=data["email"],
+            password=data["password"],
+            role="fan",
+        )
+        profile = user.fan_profile
+        update_fields = []
+        if data.get("favorite_division"):
+            profile.favorite_division = data["favorite_division"]
+            update_fields.append("favorite_division")
+        if data.get("zip_code"):
+            profile.zip_code = data["zip_code"]
+            update_fields.append("zip_code")
+        if update_fields:
+            profile.save(update_fields=update_fields + ["updated_at"])
+
+        logger.info("New fan registered: %s", user.id)
+        return Response(
+            UserService.issue_auth_payload(user),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class FanLoginView(TokenObtainPairView):
+    """POST /auth/fan/login/ — email + password for fan accounts only."""
+
+    serializer_class = FanTokenObtainPairSerializer
+
+
+class GoogleOAuthView(APIView):
+    """POST /auth/oauth/google/ — verify Google ID token and sign in as a fan."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request: Request) -> Response:
+        serializer = OAuthFanSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        identity = verify_google_token(serializer.validated_data["id_token"])
+        user = UserService.get_or_create_oauth_fan(
+            email=identity["email"],
+            name=identity.get("name") or serializer.validated_data.get("name") or "",
+            google_id=identity["google_id"],
+            favorite_division=serializer.validated_data.get("favorite_division") or "",
+            zip_code=serializer.validated_data.get("zip_code") or "",
+        )
+        logger.info("Fan signed in with Google: %s", user.id)
+        return Response(UserService.issue_auth_payload(user), status=status.HTTP_200_OK)
+
+
+class AppleOAuthView(APIView):
+    """POST /auth/oauth/apple/ — verify Apple identity token and sign in as a fan."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request: Request) -> Response:
+        serializer = OAuthFanSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        identity = verify_apple_token(serializer.validated_data["id_token"])
+
+        apple_id = identity["apple_id"]
+        email = identity.get("email") or ""
+        if not email:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            existing = User.objects.filter(apple_id=apple_id).first()
+            if existing is None:
+                raise AuthenticationFailed(
+                    "Apple did not provide an email address. Please use email sign-up, "
+                    "or grant email access on first Sign in with Apple."
+                )
+            email = existing.email
+
+        user = UserService.get_or_create_oauth_fan(
+            email=email,
+            name=serializer.validated_data.get("name") or "",
+            apple_id=apple_id,
+            favorite_division=serializer.validated_data.get("favorite_division") or "",
+            zip_code=serializer.validated_data.get("zip_code") or "",
+        )
+        logger.info("Fan signed in with Apple: %s", user.id)
+        return Response(UserService.issue_auth_payload(user), status=status.HTTP_200_OK)
+
+
+class UpdateFanProfileView(APIView):
+    """PATCH /users/fan/me/ — update fan name, division, zip, shipping, sizing."""
+
+    permission_classes = [IsAuthenticated, IsFan]
+
+    def patch(self, request: Request) -> Response:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        profile = getattr(request.user, "fan_profile", None)
+        if profile is None:
+            return Response(
+                {"detail": "No fan profile associated with this account."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = FanProfileUpdateSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        user = (
+            User.objects.select_related(*USER_DETAIL_RELATIONS)
+            .get(pk=request.user.pk)
+        )
+        return Response(UserDetailSerializer(user).data, status=status.HTTP_200_OK)

@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     ChangePasswordView,
     DeleteAccountView,
+    UpdateFanProfileView,
     UpdatePlayerProfileView,
     UpdateUserView,
     UserMeView,
@@ -16,6 +17,7 @@ urlpatterns = [
     path("me/update/",           UpdateUserView.as_view(),          name="update_user"),
     path("me/delete/",           DeleteAccountView.as_view(),       name="delete_account"),
     path("profile/me/",          UpdatePlayerProfileView.as_view(), name="update_profile"),
+    path("fan/me/",              UpdateFanProfileView.as_view(),    name="update_fan_profile"),
     path("profile/me/link/",     ProfileLinkView.as_view(),         name="profile_link"),
     path("change-password/",     ChangePasswordView.as_view(),      name="change_password"),
     # Captain: submit team link

@@ -132,15 +132,36 @@ class PaymentCallbackView(APIView):
 
     def _handle_shop_completed(self, session, metadata):
         from apps.shop.email_service import send_order_confirmation
+        from apps.shop.models import ShopOrder
+        from django.contrib.auth import get_user_model
 
         customer_details = getattr(session, "customer_details", None)
         customer_email   = getattr(customer_details, "email", None) if customer_details else None
         customer_name    = getattr(customer_details, "name",  None) if customer_details else None
         product_name     = metadata.get("product_name", "your order")
         amount_cents     = getattr(session, "amount_total", 0) or 0
+        session_id       = getattr(session, "id", "") or ""
+
+        user = None
+        user_id = metadata.get("user_id") or ""
+        if user_id:
+            User = get_user_model()
+            user = User.objects.filter(pk=user_id).first()
+
+        if session_id:
+            ShopOrder.objects.get_or_create(
+                stripe_session_id=session_id,
+                defaults={
+                    "user": user,
+                    "email": customer_email or (user.email if user else ""),
+                    "product_name": product_name,
+                    "amount_cents": amount_cents or 0,
+                    "status": ShopOrder.Status.PAID,
+                },
+            )
 
         if not customer_email:
-            logger.warning("Shop order completed but no customer email in session %s", getattr(session, "id", None))
+            logger.warning("Shop order completed but no customer email in session %s", session_id)
             return
 
         send_order_confirmation(

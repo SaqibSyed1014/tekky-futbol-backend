@@ -37,6 +37,14 @@ class BaseAPITestCase(APITestCase):
         """Create a player user with an attached PlayerProfile."""
         return UserService.create_user(email=email, password=password, role="player")
 
+    def create_fan(
+        self,
+        email: str = "fan@test.com",
+        password: str = TEST_PASSWORD,
+    ) -> User:
+        """Create a fan user with an attached FanProfile."""
+        return UserService.create_user(email=email, password=password, role="fan")
+
     def create_admin(
         self,
         email: str = "admin@test.com",

@@ -11,7 +11,14 @@ from apps.core.exceptions import (
 )
 from apps.core.transitions import PLAYER_PROFILE_TRANSITIONS
 
-from .models import PlayerProfile, User
+from .models import FanProfile, PlayerProfile, User
+
+USER_DETAIL_RELATIONS = (
+    "profile__team",
+    "waiver_signature",
+    "payment",
+    "fan_profile",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +73,103 @@ class UserService:
                 status=PlayerProfile.Status.FREE_AGENT,
             )
             logger.info("Created PlayerProfile for user %s", user.id)
+        elif role == User.Role.FAN:
+            FanProfile.objects.create(user=user)
+            logger.info("Created FanProfile for user %s", user.id)
+
+        return user
+
+    @staticmethod
+    def issue_auth_payload(user: User) -> dict:
+        """JWT pair + user payload used by register, login, and OAuth."""
+        from .serializers import CustomTokenObtainPairSerializer, UserDetailSerializer
+
+        refresh = CustomTokenObtainPairSerializer.get_token(user)
+        access = str(refresh.access_token)
+        user = (
+            User.objects.select_related(*USER_DETAIL_RELATIONS).get(pk=user.pk)
+        )
+        return {
+            "token": access,
+            "access": access,
+            "refresh": str(refresh),
+            "user": UserDetailSerializer(user).data,
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def get_or_create_oauth_fan(
+        *,
+        email: str,
+        name: str = "",
+        google_id: str | None = None,
+        apple_id: str | None = None,
+        favorite_division: str = "",
+        zip_code: str = "",
+    ) -> User:
+        """
+        Find or create a fan account from a verified Google/Apple identity.
+
+        Lookup order: provider id, then email.
+        Existing player/admin emails are rejected so roles stay isolated.
+        """
+        from apps.core.exceptions import InvalidRoleError
+
+        user = None
+        if google_id:
+            user = User.objects.filter(google_id=google_id).first()
+        if user is None and apple_id:
+            user = User.objects.filter(apple_id=apple_id).first()
+        if user is None and email:
+            user = User.objects.filter(email=email).first()
+
+        if user is None:
+            user = UserService.create_user(
+                email=email,
+                password=None,
+                role=User.Role.FAN,
+                name=name or "",
+            )
+            update_fields = []
+            if google_id:
+                user.google_id = google_id
+                update_fields.append("google_id")
+            if apple_id:
+                user.apple_id = apple_id
+                update_fields.append("apple_id")
+            if update_fields:
+                user.save(update_fields=update_fields + ["updated_at"])
+
+            profile = user.fan_profile
+            profile_fields = []
+            if favorite_division:
+                profile.favorite_division = favorite_division
+                profile_fields.append("favorite_division")
+            if zip_code:
+                profile.zip_code = zip_code
+                profile_fields.append("zip_code")
+            if profile_fields:
+                profile.save(update_fields=profile_fields + ["updated_at"])
+            return user
+
+        if user.role != User.Role.FAN:
+            raise InvalidRoleError(
+                "This email is already registered as a player or staff account. "
+                "Please use the player login page."
+            )
+
+        update_fields = []
+        if google_id and not user.google_id:
+            user.google_id = google_id
+            update_fields.append("google_id")
+        if apple_id and not user.apple_id:
+            user.apple_id = apple_id
+            update_fields.append("apple_id")
+        if name and not user.name:
+            user.name = name
+            update_fields.append("name")
+        if update_fields:
+            user.save(update_fields=update_fields + ["updated_at"])
 
         return user
 

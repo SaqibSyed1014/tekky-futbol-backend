@@ -15,6 +15,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
         ADMIN = "admin", "Admin"
         PLAYER = "player", "Player"
+        FAN = "fan", "Fan"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, db_index=True)
@@ -35,6 +36,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
         default="",
     )
+    google_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    apple_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     last_login = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -156,3 +159,53 @@ class PlayerProfile(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.email} — {self.get_status_display()}"
+
+
+class FanProfile(models.Model):
+    """
+    Lightweight profile for role=fan users.
+    Stores favorite division, zip, shipping, and sizing info.
+    """
+
+    class Division(models.TextChoices):
+        NORTH = "north", "North Court"
+        SOUTH = "south", "South Court"
+
+    class ShirtSize(models.TextChoices):
+        XS = "XS", "XS"
+        S = "S", "S"
+        M = "M", "M"
+        L = "L", "L"
+        XL = "XL", "XL"
+        XXL = "XXL", "XXL"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="fan_profile",
+    )
+    favorite_division = models.CharField(
+        max_length=10,
+        choices=Division.choices,
+        blank=True,
+        default="",
+    )
+    zip_code = models.CharField(max_length=5, blank=True, default="")
+    shipping_address = models.CharField(max_length=200, blank=True, default="")
+    shipping_city = models.CharField(max_length=100, blank=True, default="")
+    shipping_state = models.CharField(max_length=50, blank=True, default="")
+    shirt_size = models.CharField(
+        max_length=4,
+        choices=ShirtSize.choices,
+        blank=True,
+        default="",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "fan_profiles"
+
+    def __str__(self) -> str:
+        return f"{self.user.email} — fan"

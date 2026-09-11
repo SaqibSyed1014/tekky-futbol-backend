@@ -182,6 +182,12 @@ AWS_SES_REGION_NAME     = AWS_S3_REGION_NAME
 AWS_SES_REGION_ENDPOINT = f"email.{AWS_S3_REGION_NAME}.amazonaws.com"
 
 # ---------------------------------------------------------------------------
+# Fan OAuth — Google & Apple Sign-In
+# ---------------------------------------------------------------------------
+GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
+APPLE_CLIENT_ID  = config("APPLE_CLIENT_ID",  default="")
+
+# ---------------------------------------------------------------------------
 # Django REST Framework
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
