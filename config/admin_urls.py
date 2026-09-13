@@ -11,7 +11,7 @@ from apps.applications.views import AdminApplicationListView, AdminApplicationUp
 from apps.kits.views import AdminKitExportView, AdminKitListView
 from apps.payments.views import AdminPaymentListView
 from apps.teams.views import AdminMembershipActionView, AdminMembershipListView, AdminTeamListView
-from apps.users.admin_views import AdminUserListView
+from apps.users.admin_views import AdminFanListView, AdminUserListView
 from apps.users.profile_views import (
     AdminPlayerListView,
     AdminPlayerStatsUpdateView,
@@ -27,6 +27,12 @@ urlpatterns = [
     # GET  /api/v1/admin/users/
     # ------------------------------------------------------------------
     path("users/",                          AdminUserListView.as_view(),           name="admin_user_list"),
+
+    # ------------------------------------------------------------------
+    # Fans
+    # GET  /api/v1/admin/fans/
+    # ------------------------------------------------------------------
+    path("fans/",                           AdminFanListView.as_view(),            name="admin_fan_list"),
 
     # ------------------------------------------------------------------
     # Applications

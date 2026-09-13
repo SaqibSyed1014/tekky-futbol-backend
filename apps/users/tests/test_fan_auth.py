@@ -223,3 +223,79 @@ class FanOrderHistoryTests(BaseAPITestCase):
     def test_unauthenticated_returns_401(self):
         response = self.client.get(self.url)
         self.assert_status(response, status.HTTP_401_UNAUTHORIZED)
+
+
+class AdminFanListViewTests(BaseAPITestCase):
+    url = reverse("api_admin:admin_fan_list")
+
+    def setUp(self):
+        self.admin = self.create_admin(email="admin@test.com")
+        self.player = self.create_player(email="player@test.com")
+
+        self.email_fan = self.create_fan(email="emailfan@test.com")
+        self.email_fan.fan_profile.favorite_division = "north"
+        self.email_fan.fan_profile.save(update_fields=["favorite_division"])
+
+        from apps.users.services import UserService
+        self.google_fan = UserService.get_or_create_oauth_fan(
+            email="googlefan@test.com", name="Google Fan", google_id="g-1",
+            favorite_division="south",
+        )
+        self.apple_fan = UserService.get_or_create_oauth_fan(
+            email="applefan@test.com", name="Apple Fan", apple_id="a-1",
+        )
+
+    def test_admin_can_list_fans(self):
+        self.authenticate_as(self.admin)
+        response = self.client.get(self.url)
+        self.assert_status(response, status.HTTP_200_OK)
+        emails = {row["email"] for row in response.data["results"]}
+        self.assertEqual(
+            emails,
+            {"emailfan@test.com", "googlefan@test.com", "applefan@test.com"},
+        )
+        self.assertNotIn("player@test.com", emails)
+
+    def test_auth_method_reported_per_fan(self):
+        self.authenticate_as(self.admin)
+        response = self.client.get(self.url)
+        by_email = {row["email"]: row for row in response.data["results"]}
+        self.assertEqual(by_email["emailfan@test.com"]["auth_method"], "email")
+        self.assertEqual(by_email["googlefan@test.com"]["auth_method"], "google")
+        self.assertEqual(by_email["applefan@test.com"]["auth_method"], "apple")
+        self.assertEqual(by_email["googlefan@test.com"]["favorite_division"], "south")
+
+    def test_filter_by_auth_method(self):
+        self.authenticate_as(self.admin)
+        response = self.client.get(self.url, {"auth_method": "google"})
+        self.assert_status(response, status.HTTP_200_OK)
+        emails = {row["email"] for row in response.data["results"]}
+        self.assertEqual(emails, {"googlefan@test.com"})
+
+    def test_filter_by_division(self):
+        self.authenticate_as(self.admin)
+        response = self.client.get(self.url, {"division": "north"})
+        self.assert_status(response, status.HTTP_200_OK)
+        emails = {row["email"] for row in response.data["results"]}
+        self.assertEqual(emails, {"emailfan@test.com"})
+
+    def test_search_by_email(self):
+        self.authenticate_as(self.admin)
+        response = self.client.get(self.url, {"search": "googlefan"})
+        self.assert_status(response, status.HTTP_200_OK)
+        emails = {row["email"] for row in response.data["results"]}
+        self.assertEqual(emails, {"googlefan@test.com"})
+
+    def test_non_admin_forbidden(self):
+        self.authenticate_as(self.player)
+        response = self.client.get(self.url)
+        self.assert_status(response, status.HTTP_403_FORBIDDEN)
+
+    def test_fan_forbidden(self):
+        self.authenticate_as(self.email_fan)
+        response = self.client.get(self.url)
+        self.assert_status(response, status.HTTP_403_FORBIDDEN)
+
+    def test_unauthenticated_returns_401(self):
+        response = self.client.get(self.url)
+        self.assert_status(response, status.HTTP_401_UNAUTHORIZED)

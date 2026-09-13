@@ -8,7 +8,7 @@ from apps.core.pagination import StandardResultsPagination
 from apps.core.permissions import IsAdmin
 
 from .models import User
-from .serializers import AdminUserListSerializer
+from .serializers import AdminFanListSerializer, AdminUserListSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -126,3 +126,85 @@ class AdminUserListView(generics.ListAPIView):
 
     def get_queryset(self):
         return _build_user_queryset(self.request.query_params)
+
+
+# ---------------------------------------------------------------------------
+# Fans
+# ---------------------------------------------------------------------------
+
+_FAN_ALLOWED_ORDER_FIELDS = {
+    "email", "-email",
+    "created_at", "-created_at",
+}
+
+_FAN_DEFAULT_ORDERING = "-created_at"
+
+
+class AdminFanListView(generics.ListAPIView):
+    """
+    GET /admin/fans/
+
+    Paginated list of all registered fan accounts — admin only. Surfaces
+    favorite division, zip code, and how each fan signs in (Google, Apple,
+    both, or email + password) so admins can see OAuth adoption at a glance.
+
+    Query params
+    ────────────
+    search       — partial match on email or name (icontains)
+    auth_method  — google | apple | email  (google/apple also match
+                   accounts linked to both providers)
+    division     — north | south
+    ordering     — email | -email | created_at | -created_at
+    page / page_size — standard pagination
+
+    Permission: IsAdmin (authenticated admins only).
+    """
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+    serializer_class = AdminFanListSerializer
+    pagination_class = StandardResultsPagination
+
+    def get_queryset(self):
+        query_params = self.request.query_params
+        qs = (
+            User.objects
+            .filter(role=User.Role.FAN)
+            .select_related("fan_profile")
+            .order_by(_FAN_DEFAULT_ORDERING)
+        )
+
+        search = query_params.get("search", "").strip()
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(email__icontains=search) | Q(name__icontains=search))
+
+        auth_method = query_params.get("auth_method", "").strip().lower()
+        if auth_method == "google":
+            qs = qs.filter(google_id__isnull=False)
+        elif auth_method == "apple":
+            qs = qs.filter(apple_id__isnull=False)
+        elif auth_method == "email":
+            qs = qs.filter(google_id__isnull=True, apple_id__isnull=True)
+        elif auth_method:
+            raise ValidationError(
+                {"auth_method": "Must be 'google', 'apple', or 'email'."}
+            )
+
+        division = query_params.get("division", "").strip().lower()
+        if division:
+            valid_divisions = {"north", "south"}
+            if division not in valid_divisions:
+                raise ValidationError(
+                    {"division": f"Invalid division '{division}'. Valid values: {sorted(valid_divisions)}."}
+                )
+            qs = qs.filter(fan_profile__favorite_division=division)
+
+        ordering = query_params.get("ordering", "").strip()
+        if ordering:
+            if ordering not in _FAN_ALLOWED_ORDER_FIELDS:
+                raise ValidationError(
+                    {"ordering": f"Invalid ordering '{ordering}'. Allowed: {sorted(_FAN_ALLOWED_ORDER_FIELDS)}."}
+                )
+            qs = qs.order_by(ordering)
+
+        return qs

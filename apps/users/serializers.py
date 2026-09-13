@@ -492,3 +492,55 @@ class AdminUserListSerializer(serializers.ModelSerializer):
 
     def get_waiver_signed(self, obj) -> bool:
         return hasattr(obj, "waiver_signature")
+
+
+# ---------------------------------------------------------------------------
+# Admin — fan list (flat representation)
+# ---------------------------------------------------------------------------
+
+
+class AdminFanListSerializer(serializers.ModelSerializer):
+    """
+    Flat representation for the admin fan-list endpoint.
+
+    auth_method reflects how the account was created / is able to sign in:
+    'google', 'apple', 'google_apple' (linked both), or 'email' (password only).
+    A fan can have both a linked provider and a password (e.g. they signed up
+    with Google, then later set a password) — auth_method always reports the
+    linked OAuth provider(s) when present, since that's what admins are
+    asking to see.
+    """
+
+    favorite_division = serializers.SerializerMethodField()
+    zip_code           = serializers.SerializerMethodField()
+    auth_method        = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "email",
+            "name",
+            "favorite_division",
+            "zip_code",
+            "auth_method",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_favorite_division(self, obj) -> str:
+        profile = getattr(obj, "fan_profile", None)
+        return getattr(profile, "favorite_division", "") or ""
+
+    def get_zip_code(self, obj) -> str:
+        profile = getattr(obj, "fan_profile", None)
+        return getattr(profile, "zip_code", "") or ""
+
+    def get_auth_method(self, obj) -> str:
+        if obj.google_id and obj.apple_id:
+            return "google_apple"
+        if obj.google_id:
+            return "google"
+        if obj.apple_id:
+            return "apple"
+        return "email"
