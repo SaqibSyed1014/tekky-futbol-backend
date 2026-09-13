@@ -535,17 +535,8 @@ class FanRegisterView(APIView):
             email=data["email"],
             password=data["password"],
             role="fan",
+            name=data["name"],
         )
-        profile = user.fan_profile
-        update_fields = []
-        if data.get("favorite_division"):
-            profile.favorite_division = data["favorite_division"]
-            update_fields.append("favorite_division")
-        if data.get("zip_code"):
-            profile.zip_code = data["zip_code"]
-            update_fields.append("zip_code")
-        if update_fields:
-            profile.save(update_fields=update_fields + ["updated_at"])
 
         logger.info("New fan registered: %s", user.id)
         return Response(

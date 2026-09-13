@@ -19,20 +19,20 @@ class FanRegisterViewTests(BaseAPITestCase):
             self.url,
             {
                 "email": "newfan@test.com",
+                "name": "Newest Fan",
                 "password": TEST_PASSWORD,
                 "password2": TEST_PASSWORD,
-                "favorite_division": "north",
-                "zip_code": "60601",
             },
             format="json",
         )
         self.assert_status(response, status.HTTP_201_CREATED)
         self.assertEqual(response.data["user"]["role"], "fan")
+        self.assertEqual(response.data["user"]["name"], "Newest Fan")
         self.assertIn("token", response.data)
         user = User.objects.get(email="newfan@test.com")
         self.assertTrue(FanProfile.objects.filter(user=user).exists())
-        self.assertEqual(user.fan_profile.favorite_division, "north")
-        self.assertEqual(user.fan_profile.zip_code, "60601")
+        self.assertEqual(user.fan_profile.favorite_division, "")
+        self.assertEqual(user.fan_profile.zip_code, "")
 
     def test_player_register_rejects_fan_role(self):
         response = self.client.post(
@@ -47,14 +47,13 @@ class FanRegisterViewTests(BaseAPITestCase):
         )
         self.assert_status(response, status.HTTP_400_BAD_REQUEST)
 
-    def test_invalid_zip_returns_400(self):
+    def test_name_is_required(self):
         response = self.client.post(
             self.url,
             {
-                "email": "badzip@test.com",
+                "email": "noname@test.com",
                 "password": TEST_PASSWORD,
                 "password2": TEST_PASSWORD,
-                "zip_code": "60",
             },
             format="json",
         )

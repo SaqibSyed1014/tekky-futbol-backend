@@ -107,6 +107,7 @@ class FanRegisterSerializer(serializers.Serializer):
     """Input for POST /auth/fan/register/."""
 
     email = serializers.EmailField(max_length=254)
+    name = serializers.CharField(max_length=100, min_length=2)
     password = serializers.CharField(
         write_only=True,
         min_length=8,
@@ -117,18 +118,6 @@ class FanRegisterSerializer(serializers.Serializer):
         style={"input_type": "password"},
         label="Confirm password",
     )
-    favorite_division = serializers.ChoiceField(
-        choices=FanProfile.Division.choices,
-        required=False,
-        allow_blank=True,
-        default="",
-    )
-    zip_code = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        default="",
-        max_length=5,
-    )
 
     def validate_email(self, value: str) -> str:
         normalised = value.strip().lower()
@@ -138,18 +127,15 @@ class FanRegisterSerializer(serializers.Serializer):
             )
         return normalised
 
+    def validate_name(self, value: str) -> str:
+        return value.strip()
+
     def validate_password(self, value: str) -> str:
         try:
             validate_password(value)
         except DjangoValidationError as exc:
             raise serializers.ValidationError(list(exc.messages))
         return value
-
-    def validate_zip_code(self, value: str) -> str:
-        v = (value or "").strip()
-        if v and (len(v) != 5 or not v.isdigit()):
-            raise serializers.ValidationError("Zip code must be 5 digits.")
-        return v
 
     def validate(self, attrs: dict) -> dict:
         if attrs["password"] != attrs["password2"]:
