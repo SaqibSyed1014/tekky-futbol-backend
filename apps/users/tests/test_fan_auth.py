@@ -61,11 +61,14 @@ class FanRegisterViewTests(BaseAPITestCase):
 
 
 class FanLoginViewTests(BaseAPITestCase):
-    url = reverse("auth:fan_login")
+    """The single /auth/login/ endpoint is shared by every role."""
+
+    url = reverse("auth:login")
 
     def setUp(self):
         self.fan = self.create_fan(email="fanlogin@test.com")
         self.player = self.create_player(email="playerlogin@test.com")
+        self.admin = self.create_admin(email="adminlogin@test.com")
 
     def test_fan_login_returns_200(self):
         response = self.client.post(
@@ -77,18 +80,28 @@ class FanLoginViewTests(BaseAPITestCase):
         self.assertEqual(response.data["user"]["role"], "fan")
         self.assertIn("fan_profile", response.data["user"])
 
-    def test_player_cannot_use_fan_login(self):
+    def test_player_login_returns_200(self):
         response = self.client.post(
             self.url,
             {"email": "playerlogin@test.com", "password": TEST_PASSWORD},
             format="json",
         )
-        self.assert_status(response, status.HTTP_401_UNAUTHORIZED)
+        self.assert_status(response, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["role"], "player")
 
-    def test_fan_cannot_use_player_login(self):
+    def test_admin_login_returns_200(self):
         response = self.client.post(
-            reverse("auth:login"),
-            {"email": "fanlogin@test.com", "password": TEST_PASSWORD},
+            self.url,
+            {"email": "adminlogin@test.com", "password": TEST_PASSWORD},
+            format="json",
+        )
+        self.assert_status(response, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["role"], "admin")
+
+    def test_wrong_password_returns_401(self):
+        response = self.client.post(
+            self.url,
+            {"email": "fanlogin@test.com", "password": "wrong-password"},
             format="json",
         )
         self.assert_status(response, status.HTTP_401_UNAUTHORIZED)

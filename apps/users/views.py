@@ -24,7 +24,6 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
     FanProfileUpdateSerializer,
     FanRegisterSerializer,
-    FanTokenObtainPairSerializer,
     OAuthFanSerializer,
     PlayerProfileUpdateSerializer,
     RegisterSerializer,
@@ -543,12 +542,6 @@ class FanRegisterView(APIView):
             UserService.issue_auth_payload(user),
             status=status.HTTP_201_CREATED,
         )
-
-
-class FanLoginView(TokenObtainPairView):
-    """POST /auth/fan/login/ — email + password for fan accounts only."""
-
-    serializer_class = FanTokenObtainPairSerializer
 
 
 class GoogleOAuthView(APIView):

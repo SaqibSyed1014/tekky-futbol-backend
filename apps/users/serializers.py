@@ -3,8 +3,6 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from rest_framework.exceptions import AuthenticationFailed
-
 from .models import FanProfile, PlayerProfile, User
 
 # ---------------------------------------------------------------------------
@@ -383,10 +381,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     2. Include the full UserDetailSerializer payload in the HTTP response
        body (including waiver_signed and profile) so the frontend has
        everything it needs immediately after login.
-    """
 
-    allowed_roles = {User.Role.PLAYER, User.Role.ADMIN}
-    wrong_role_message = "Please sign in through the fan login page."
+    Shared by the single /auth/login/ endpoint used by every role — fan,
+    player, captain, and admin all sign in here.
+    """
 
     @classmethod
     def get_token(cls, user: User):
@@ -399,8 +397,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
-        if self.user.role not in self.allowed_roles:
-            raise AuthenticationFailed(self.wrong_role_message)
 
         from .services import USER_DETAIL_RELATIONS
 
@@ -409,13 +405,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # 'token' alias so the frontend can do auth.setToken(data.token)
         data["token"] = data["access"]
         return data
-
-
-class FanTokenObtainPairSerializer(CustomTokenObtainPairSerializer):
-    """Player/admin accounts cannot use the fan login endpoint."""
-
-    allowed_roles = {User.Role.FAN}
-    wrong_role_message = "Please sign in through the player login page."
 
 
 # ---------------------------------------------------------------------------
