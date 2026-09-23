@@ -1,10 +1,13 @@
 from django.urls import path
 
-from .views import LockKitView, MyKitOrderView, MyKitView
+from .views import KitStatusView, LockKitView, MyKitOrderView, MyKitView
 
 app_name = "kits"
 
 urlpatterns = [
+    # GET /kits/status/    — public: claimed kit slugs
+    path("status/",   KitStatusView.as_view(),   name="kit_status"),
+
     # GET  /kits/my/       — view team kit state + own order
     # PATCH /kits/my/      — captain: select / change kit slug
     path("my/",       MyKitView.as_view(),      name="my_kit"),

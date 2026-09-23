@@ -4,7 +4,7 @@ import logging
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -73,12 +73,16 @@ class MyKitView(APIView):
             except KitOrder.DoesNotExist:
                 pass
 
+        captain_profile = getattr(team.captain, "profile", None)
+        preferred_division = getattr(captain_profile, "preferred_division", "") or ""
+
         return {
             "kit": kit_data,
             "my_order": own_order,
             "is_captain": request.user.is_captain,
             "team_name": team.name,
             "max_players": team.max_players,
+            "preferred_division": preferred_division,
         }
 
     def get(self, request):
@@ -269,6 +273,34 @@ class MyKitOrderView(APIView):
 
         logger.info("Kit order updated by user %s for team %s", request.user.id, team.id)
         return Response(KitOrderSerializer(order).data)
+
+
+# ---------------------------------------------------------------------------
+# GET /kits/status/  — public: which kit slugs are already claimed
+# ---------------------------------------------------------------------------
+
+class KitStatusView(APIView):
+    """
+    GET /kits/status/
+
+    Public, unauthenticated endpoint — lists the kit slugs currently claimed
+    (locked by a captain). Used by the public Season 1 Kits page to show
+    each kit's Available / Claimed status without exposing which team holds
+    it or any other team detail.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        # .distinct() guards against the same slug being locked by more than
+        # one team — kit_slug isn't DB-enforced unique across teams.
+        claimed = list(
+            TeamKitSelection.objects
+            .filter(is_locked=True)
+            .values_list("kit_slug", flat=True)
+            .distinct()
+        )
+        return Response({"claimed": claimed})
 
 
 # ---------------------------------------------------------------------------
