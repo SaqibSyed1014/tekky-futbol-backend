@@ -116,7 +116,11 @@ class PaymentCallbackView(APIView):
 
         logger.info("Stripe webhook: type=%s session=%s", event_type, getattr(session, "id", None))
 
-        metadata     = getattr(session, "metadata", None) or {}
+        raw_metadata = getattr(session, "metadata", None)
+        # Stripe's metadata comes back as a StripeObject, not a plain dict — in
+        # this SDK version StripeObject has no .get(), so .to_dict() it first
+        # (bare dict(...) also fails: StripeObject doesn't iterate like a mapping).
+        metadata     = raw_metadata.to_dict() if raw_metadata else {}
         is_shop_order   = metadata.get("type") == "shop_order"
         is_ticket_order = metadata.get("type") == "ticket_order"
 

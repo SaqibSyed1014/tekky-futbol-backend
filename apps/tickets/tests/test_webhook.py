@@ -8,6 +8,9 @@ this just needs to prove the ticket-specific branches behave correctly.
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.urls import reverse
+from rest_framework import status
+
 from apps.payments.views import PaymentCallbackView
 from apps.tickets.models import TicketOrder
 from apps.users.tests.base import BaseAPITestCase
@@ -100,3 +103,44 @@ class TicketExpiredWebhookTests(BaseAPITestCase):
         PaymentCallbackView()._handle_ticket_expired(session, {"type": "ticket_order"})
 
         self.assertTrue(TicketOrder.objects.filter(stripe_session_id="cs_webhook_1").exists())
+
+
+class _FakeStripeMetadata:
+    """Mimics stripe._stripe_object.StripeObject (this SDK version): supports
+    .to_dict() but has NO .get() — calling metadata.get(...) directly on it
+    raises AttributeError. Every prior test in this file built `metadata` as
+    a plain Python dict and called the handler methods directly, which never
+    exercised PaymentCallbackView.post()'s own metadata handling — that's how
+    a real production 500 (every ticket webhook crashing) slipped past the
+    suite. This test goes through post() itself with a metadata object shaped
+    like the real one, so it would have caught it."""
+
+    def __init__(self, data):
+        self._data = dict(data)
+
+    def to_dict(self):
+        return dict(self._data)
+
+
+class WebhookRealMetadataShapeTests(BaseAPITestCase):
+    def test_post_does_not_crash_on_stripe_object_style_metadata(self):
+        _pending_ticket(session_id="cs_webhook_meta")
+        session = SimpleNamespace(
+            id="cs_webhook_meta",
+            customer_details=SimpleNamespace(email="guest@test.com", name="Guest Buyer"),
+            metadata=_FakeStripeMetadata({"type": "ticket_order"}),
+        )
+        event = {"type": "checkout.session.completed", "data": {"object": session}}
+
+        with patch("apps.payments.views.verify_webhook", return_value=event), \
+             patch("apps.tickets.email_service.send_ticket_confirmation"):
+            response = self.client.post(
+                reverse("payments:callback"),
+                data="{}",
+                content_type="application/json",
+                HTTP_STRIPE_SIGNATURE="test",
+            )
+
+        self.assert_status(response, status.HTTP_200_OK)
+        order = TicketOrder.objects.get(stripe_session_id="cs_webhook_meta")
+        self.assertEqual(order.status, TicketOrder.Status.PAID)
