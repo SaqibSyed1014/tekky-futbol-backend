@@ -137,14 +137,25 @@ def verify_qr_token(token: str) -> uuid.UUID:
         raise InvalidTicketToken("This QR code is invalid.")
 
 
-def render_qr_base64(token: str) -> str:
-    """Renders the token to a PNG and returns it as a base64 string, generated on demand — never stored."""
+def render_qr_png_bytes(token: str) -> bytes:
+    """Renders the token to PNG bytes, generated on demand — never stored."""
     image = qrcode.make(token)
     buffer = BytesIO()
     image.save(buffer, format="PNG")
-    return base64.b64encode(buffer.getvalue()).decode("ascii")
+    return buffer.getvalue()
+
+
+def render_qr_base64(token: str) -> str:
+    """Base64 string form — for embedding as a data: URI in a browser <img>, e.g. the wallet pages.
+    Not for email: Gmail and most mail clients strip data: URI images from HTML emails."""
+    return base64.b64encode(render_qr_png_bytes(token)).decode("ascii")
 
 
 def ticket_qr_base64(ticket: TicketOrder) -> str:
     """Convenience wrapper — the QR image for a given ticket, derived fresh from its id."""
     return render_qr_base64(make_qr_token(ticket.id))
+
+
+def ticket_qr_png_bytes(ticket: TicketOrder) -> bytes:
+    """Convenience wrapper — raw PNG bytes, for attaching inline (cid:) to an email."""
+    return render_qr_png_bytes(make_qr_token(ticket.id))

@@ -185,7 +185,7 @@ class PaymentCallbackView(APIView):
 
         from apps.tickets.email_service import send_ticket_confirmation
         from apps.tickets.models import TicketOrder
-        from apps.tickets.services import ticket_qr_base64
+        from apps.tickets.services import ticket_qr_png_bytes
 
         session_id = getattr(session, "id", "") or ""
         if not session_id:
@@ -219,7 +219,7 @@ class PaymentCallbackView(APIView):
                 customer_name=customer_name,
                 product_name=ticket.product_name,
                 amount_cents=ticket.amount_cents,
-                qr_code_base64=ticket_qr_base64(ticket),
+                qr_png_bytes=ticket_qr_png_bytes(ticket),
             )
 
     def _handle_ticket_expired(self, session, metadata):

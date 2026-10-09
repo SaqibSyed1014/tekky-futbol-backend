@@ -1,9 +1,12 @@
 import logging
+from email.mime.image import MIMEImage
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 
 logger = logging.getLogger(__name__)
+
+QR_CONTENT_ID = "ticket-qr-code"
 
 FRONTEND_BASE = getattr(settings, "FRONTEND_BASE_URL", "https://tekkyfutbol.net")
 
@@ -54,10 +57,15 @@ def send_ticket_confirmation(
     customer_name: str,
     product_name: str,
     amount_cents: int,
-    qr_code_base64: str,
+    qr_png_bytes: bytes,
 ) -> None:
     """Guest ticket delivery — the QR is embedded directly in the email, since a
-    guest has no account wallet to view it in."""
+    guest has no account wallet to view it in.
+
+    Sent as an inline CID attachment, not a data: URI — Gmail (and most other
+    mail clients) strip data: URI images from HTML emails entirely, so an
+    <img src="data:..."> QR code silently renders as a broken image there.
+    """
     display_name = customer_name or "there"
     amount_display = f"${amount_cents / 100:.2f}"
     tickets_url = f"{FRONTEND_BASE}/tickets"
@@ -88,7 +96,7 @@ def send_ticket_confirmation(
       <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
         <tr>
           <td align="center" style="background:#fff;border-radius:10px;padding:20px;">
-            <img src="data:image/png;base64,{qr_code_base64}" alt="Ticket QR code"
+            <img src="cid:{QR_CONTENT_ID}" alt="Ticket QR code"
                  width="220" height="220" style="display:block;width:220px;height:220px;" />
           </td>
         </tr>
@@ -128,14 +136,21 @@ def send_ticket_confirmation(
     )
 
     try:
-        send_mail(
+        message = EmailMultiAlternatives(
             subject=f"Your Pass Is Confirmed — {product_name}",
-            message=text_body,
+            body=text_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[customer_email],
-            html_message=_wrap_html(html_body),
-            fail_silently=False,
+            to=[customer_email],
         )
+        message.attach_alternative(_wrap_html(html_body), "text/html")
+        message.mixed_subtype = "related"  # keeps the inline image attached to this HTML, not a separate download
+
+        qr_image = MIMEImage(qr_png_bytes, _subtype="png")
+        qr_image.add_header("Content-ID", f"<{QR_CONTENT_ID}>")
+        qr_image.add_header("Content-Disposition", "inline", filename="ticket-qr.png")
+        message.attach(qr_image)
+
+        message.send(fail_silently=False)
         logger.info("Ticket confirmation sent to %s for '%s'", customer_email, product_name)
     except Exception:
         logger.exception("Failed to send ticket confirmation to %s", customer_email)
