@@ -117,15 +117,20 @@ class PaymentCallbackView(APIView):
         logger.info("Stripe webhook: type=%s session=%s", event_type, getattr(session, "id", None))
 
         metadata     = getattr(session, "metadata", None) or {}
-        is_shop_order = metadata.get("type") == "shop_order"
+        is_shop_order   = metadata.get("type") == "shop_order"
+        is_ticket_order = metadata.get("type") == "ticket_order"
 
         if event_type == "checkout.session.completed":
             if is_shop_order:
                 self._handle_shop_completed(session, metadata)
+            elif is_ticket_order:
+                self._handle_ticket_completed(session, metadata)
             else:
                 self._handle_completed(session)
         elif event_type == "checkout.session.expired":
-            if not is_shop_order:
+            if is_ticket_order:
+                self._handle_ticket_expired(session, metadata)
+            elif not is_shop_order:
                 self._handle_expired(session)
 
         return Response({"detail": "OK"})
@@ -170,6 +175,62 @@ class PaymentCallbackView(APIView):
             product_name=product_name,
             amount_cents=amount_cents,
         )
+
+    def _handle_ticket_completed(self, session, metadata):
+        from django.db import transaction
+
+        from apps.tickets.email_service import send_ticket_confirmation
+        from apps.tickets.models import TicketOrder
+        from apps.tickets.services import ticket_qr_base64
+
+        session_id = getattr(session, "id", "") or ""
+        if not session_id:
+            return
+
+        customer_details = getattr(session, "customer_details", None)
+        customer_email   = getattr(customer_details, "email", None) if customer_details else None
+        customer_name    = getattr(customer_details, "name",  None) if customer_details else None
+
+        with transaction.atomic():
+            ticket = TicketOrder.objects.select_for_update().filter(stripe_session_id=session_id).first()
+            if ticket is None:
+                logger.error("Stripe webhook: no ticket order found for session=%s", session_id)
+                return
+
+            if ticket.status != TicketOrder.Status.PENDING:
+                # Already processed — idempotent against Stripe's at-least-once delivery.
+                return
+
+            ticket.status = TicketOrder.Status.PAID
+            if not ticket.user_id and customer_email:
+                ticket.email = customer_email
+            ticket.save(update_fields=["status", "email"])
+
+        if ticket.user_id is None:
+            if not customer_email:
+                logger.warning("Ticket order completed but no customer email in session %s", session_id)
+                return
+            send_ticket_confirmation(
+                customer_email=customer_email,
+                customer_name=customer_name,
+                product_name=ticket.product_name,
+                amount_cents=ticket.amount_cents,
+                qr_code_base64=ticket_qr_base64(ticket),
+            )
+
+    def _handle_ticket_expired(self, session, metadata):
+        from apps.tickets.models import TicketOrder
+
+        session_id = getattr(session, "id", "") or ""
+        if not session_id:
+            return
+
+        deleted, _ = TicketOrder.objects.filter(
+            stripe_session_id=session_id,
+            status=TicketOrder.Status.PENDING,
+        ).delete()
+        if deleted:
+            logger.info("Ticket order expired, capacity released: session=%s", session_id)
 
     def _handle_completed(self, session):
         reference_number = getattr(session, "client_reference_id", None)

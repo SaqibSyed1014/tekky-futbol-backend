@@ -81,6 +81,16 @@ urlpatterns = [
     path(f"{API_V1}shop/", include("apps.shop.urls", namespace="shop")),
 
     # -------------------------------------------------------------------------
+    # Tickets  — public checkout/availability, auth required for the wallet
+    # POST /api/v1/tickets/checkout/
+    # GET  /api/v1/tickets/availability/
+    # GET  /api/v1/tickets/by-session/<stripe_session_id>/
+    # GET  /api/v1/tickets/my/
+    # POST /api/v1/tickets/check-in/
+    # -------------------------------------------------------------------------
+    path(f"{API_V1}tickets/", include("apps.tickets.urls", namespace="tickets")),
+
+    # -------------------------------------------------------------------------
     # Admin dashboard  — all admin-facing endpoints in one namespace
     # GET   /api/v1/admin/users/
     # GET   /api/v1/admin/applications/
