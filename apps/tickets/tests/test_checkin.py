@@ -1,11 +1,13 @@
+from django.core.cache import cache
 from django.urls import reverse
 from rest_framework import status
 
-from apps.tickets.models import TicketOrder
+from apps.tickets.models import Staff, TicketOrder
 from apps.tickets.services import make_qr_token
 from apps.users.tests.base import BaseAPITestCase
 
-CHECK_IN_URL = reverse("tickets:check_in")
+VERIFY_DETAILS_URL = reverse("tickets:verify_details")
+VERIFY_URL = reverse("tickets:verify")
 ADMIN_LIST_URL = reverse("api_admin:admin_ticket_list")
 
 
@@ -23,73 +25,130 @@ def _paid_ticket(**kwargs):
     return TicketOrder.objects.create(**defaults)
 
 
-class CheckInPermissionTests(BaseAPITestCase):
-    def test_unauthenticated_returns_401(self):
-        response = self.client.post(CHECK_IN_URL, {"token": "whatever"})
-        self.assert_status(response, status.HTTP_401_UNAUTHORIZED)
-
-    def test_fan_cannot_scan(self):
-        self.authenticate_as(self.create_fan())
-        response = self.client.post(CHECK_IN_URL, {"token": "whatever"})
-        self.assert_status(response, status.HTTP_403_FORBIDDEN)
-
-    def test_player_cannot_scan(self):
-        self.authenticate_as(self.create_player())
-        response = self.client.post(CHECK_IN_URL, {"token": "whatever"})
-        self.assert_status(response, status.HTTP_403_FORBIDDEN)
+def _staff(**kwargs):
+    defaults = dict(name="Gate Staff", unique_id="123456")
+    defaults.update(kwargs)
+    return Staff.objects.create(**defaults)
 
 
-class CheckInBehaviorTests(BaseAPITestCase):
-    def setUp(self):
-        self.admin = self.create_admin()
-        self.authenticate_as(self.admin)
+class TicketVerifyDetailsTests(BaseAPITestCase):
+    """GET /tickets/verify-details/ — public, read-only lookup shown right after scanning."""
 
-    def test_valid_ticket_is_checked_in(self):
+    def test_public_no_auth_required(self):
         ticket = _paid_ticket()
         token = make_qr_token(ticket.id)
 
-        response = self.client.post(CHECK_IN_URL, {"token": token})
+        response = self.client.get(VERIFY_DETAILS_URL, {"token": token})
+
+        self.assert_status(response, status.HTTP_200_OK)
+        self.assertEqual(response.data["product_name"], "Test Pass")
+        self.assertEqual(response.data["status"], "paid")
+
+    def test_shows_guest_email_when_no_account(self):
+        ticket = _paid_ticket(user=None, email="guest@test.com")
+        token = make_qr_token(ticket.id)
+
+        response = self.client.get(VERIFY_DETAILS_URL, {"token": token})
+
+        self.assert_status(response, status.HTTP_200_OK)
+        self.assertEqual(response.data["buyer_email"], "guest@test.com")
+
+    def test_invalid_token_returns_400(self):
+        response = self.client.get(VERIFY_DETAILS_URL, {"token": "not-a-real-token"})
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+
+    def test_missing_token_returns_400(self):
+        response = self.client.get(VERIFY_DETAILS_URL)
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+
+    def test_pending_ticket_not_found(self):
+        ticket = _paid_ticket(status=TicketOrder.Status.PENDING)
+        token = make_qr_token(ticket.id)
+
+        response = self.client.get(VERIFY_DETAILS_URL, {"token": token})
+        self.assert_status(response, status.HTTP_404_NOT_FOUND)
+
+
+class TicketVerifyTests(BaseAPITestCase):
+    """POST /tickets/verify/ — the actual check-in action, gated by a staff unique_id."""
+
+    def setUp(self):
+        cache.clear()  # scoped throttle state is process-global — isolate each test
+
+    def test_valid_staff_id_checks_in_the_ticket(self):
+        ticket = _paid_ticket()
+        token = make_qr_token(ticket.id)
+        staff = _staff()
+
+        response = self.client.post(VERIFY_URL, {"token": token, "staff_unique_id": staff.unique_id})
 
         self.assert_status(response, status.HTTP_200_OK)
         self.assertFalse(response.data["already_checked_in"])
+        self.assertEqual(response.data["checked_in_by"], staff.name)
 
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, TicketOrder.Status.CHECKED_IN)
         self.assertIsNotNone(ticket.checked_in_at)
-        self.assertEqual(ticket.checked_in_by, self.admin)
+        self.assertEqual(ticket.checked_in_by_staff, staff)
 
-    def test_second_scan_reports_already_checked_in_with_original_timestamp(self):
+    def test_invalid_staff_id_is_rejected_and_ticket_untouched(self):
         ticket = _paid_ticket()
         token = make_qr_token(ticket.id)
 
-        first = self.client.post(CHECK_IN_URL, {"token": token})
-        second = self.client.post(CHECK_IN_URL, {"token": token})
+        response = self.client.post(VERIFY_URL, {"token": token, "staff_unique_id": "999999"})
+
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, TicketOrder.Status.PAID)
+
+    def test_missing_staff_id_returns_400(self):
+        ticket = _paid_ticket()
+        token = make_qr_token(ticket.id)
+
+        response = self.client.post(VERIFY_URL, {"token": token})
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+
+    def test_second_verify_reports_already_checked_in_with_original_timestamp(self):
+        ticket = _paid_ticket()
+        token = make_qr_token(ticket.id)
+        staff = _staff()
+
+        first = self.client.post(VERIFY_URL, {"token": token, "staff_unique_id": staff.unique_id})
+        second = self.client.post(VERIFY_URL, {"token": token, "staff_unique_id": staff.unique_id})
 
         self.assert_status(second, status.HTTP_200_OK)
         self.assertTrue(second.data["already_checked_in"])
         self.assertEqual(first.data["checked_in_at"], second.data["checked_in_at"])
 
-    def test_pending_ticket_cannot_be_checked_in(self):
+    def test_pending_ticket_cannot_be_verified(self):
         ticket = _paid_ticket(status=TicketOrder.Status.PENDING)
         token = make_qr_token(ticket.id)
+        staff = _staff()
 
-        response = self.client.post(CHECK_IN_URL, {"token": token})
+        response = self.client.post(VERIFY_URL, {"token": token, "staff_unique_id": staff.unique_id})
         self.assert_status(response, status.HTTP_400_BAD_REQUEST)
 
     def test_tampered_token_is_rejected(self):
         ticket = _paid_ticket()
         token = make_qr_token(ticket.id)
         tampered = token[:-1] + ("a" if token[-1] != "a" else "b")
+        staff = _staff()
 
-        response = self.client.post(CHECK_IN_URL, {"token": tampered})
+        response = self.client.post(VERIFY_URL, {"token": tampered, "staff_unique_id": staff.unique_id})
         self.assert_status(response, status.HTTP_400_BAD_REQUEST)
 
         ticket.refresh_from_db()
-        self.assertEqual(ticket.status, TicketOrder.Status.PAID)  # untouched
+        self.assertEqual(ticket.status, TicketOrder.Status.PAID)
 
-    def test_missing_token_returns_400(self):
-        response = self.client.post(CHECK_IN_URL, {})
-        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+    def test_no_login_required(self):
+        """The whole point — a staff member on their own phone is never logged in as admin."""
+        self.deauthenticate()
+        ticket = _paid_ticket()
+        token = make_qr_token(ticket.id)
+        staff = _staff()
+
+        response = self.client.post(VERIFY_URL, {"token": token, "staff_unique_id": staff.unique_id})
+        self.assert_status(response, status.HTTP_200_OK)
 
 
 class AdminTicketListTests(BaseAPITestCase):
@@ -151,3 +210,13 @@ class AdminTicketListTests(BaseAPITestCase):
 
         self.assert_status(response, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 0)
+
+    def test_shows_which_staff_member_checked_a_ticket_in(self):
+        staff = _staff(name="Jordan Gate")
+        _paid_ticket(status=TicketOrder.Status.CHECKED_IN, checked_in_by_staff=staff)
+
+        self.authenticate_as(self.create_admin())
+        response = self.client.get(ADMIN_LIST_URL)
+
+        self.assert_status(response, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"][0]["checked_in_by_name"], "Jordan Gate")

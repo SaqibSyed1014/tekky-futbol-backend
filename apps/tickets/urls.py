@@ -4,8 +4,9 @@ from .views import (
     MyTicketsView,
     TicketAvailabilityView,
     TicketBySessionView,
-    TicketCheckInView,
     TicketCheckoutView,
+    TicketVerifyDetailsView,
+    TicketVerifyView,
 )
 
 app_name = "tickets"
@@ -15,5 +16,6 @@ urlpatterns = [
     path("availability/", TicketAvailabilityView.as_view(), name="availability"),
     path("by-session/<str:session_id>/", TicketBySessionView.as_view(), name="by_session"),
     path("my/", MyTicketsView.as_view(), name="my_tickets"),
-    path("check-in/", TicketCheckInView.as_view(), name="check_in"),
+    path("verify-details/", TicketVerifyDetailsView.as_view(), name="verify_details"),
+    path("verify/", TicketVerifyView.as_view(), name="verify"),
 ]

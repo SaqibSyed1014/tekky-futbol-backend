@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -23,8 +24,8 @@ from .constants import (
     TIER_LABELS,
     TIER_PRICES_CENTS,
 )
-from .models import TicketOrder
-from .serializers import AdminTicketSerializer, MyTicketSerializer
+from .models import Staff, TicketOrder
+from .serializers import AdminTicketSerializer, MyTicketSerializer, StaffSerializer
 from .services import (
     InvalidTicketToken,
     SoldOut,
@@ -224,19 +225,20 @@ class MyTicketsView(APIView):
         return Response(MyTicketSerializer(qs, many=True).data)
 
 
-class TicketCheckInView(APIView):
+class TicketVerifyDetailsView(APIView):
     """
-    POST /api/v1/tickets/check-in/  { "token": "<scanned qr token>" }
+    GET /api/v1/tickets/verify-details/?token=<scanned qr token>
 
-    Admin-only (gate staff log in as admin — no separate staff role exists
-    in this project today). Scanning twice is not an error: the second scan
-    returns already_checked_in=true with the original timestamp.
+    Public — the landing page a staff member sees right after scanning a
+    ticket's QR with their phone's camera. Read-only: shows who the ticket
+    belongs to and whether it's already been checked in, before anyone
+    commits to actually verifying it.
     """
 
-    permission_classes = [IsAdmin]
+    permission_classes = [AllowAny]
 
-    def post(self, request):
-        token = (request.data.get("token") or "").strip()
+    def get(self, request):
+        token = (request.query_params.get("token") or "").strip()
         if not token:
             return Response({"detail": "token is required."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -244,6 +246,54 @@ class TicketCheckInView(APIView):
             ticket_id = verify_qr_token(token)
         except InvalidTicketToken:
             return Response({"detail": "Invalid QR code."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ticket = TicketOrder.objects.filter(id=ticket_id).exclude(status=TicketOrder.Status.PENDING).first()
+        if ticket is None:
+            return Response({"detail": "Ticket not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "product_name": ticket.product_name,
+            "buyer_name": ticket.user.name if ticket.user else "",
+            "buyer_email": ticket.user.email if ticket.user else ticket.email,
+            "status": ticket.status,
+            "checked_in_at": ticket.checked_in_at,
+            "checked_in_by": ticket.checked_in_by_staff.name if ticket.checked_in_by_staff else "",
+        })
+
+
+class TicketVerifyView(APIView):
+    """
+    POST /api/v1/tickets/verify/  { "token": "...", "staff_unique_id": "123456" }
+
+    Public, but gated by a valid staff unique_id — this is the actual
+    check-in action. Scanning twice is not an error: the second verify
+    returns already_checked_in=true with the original timestamp and staff name.
+
+    Throttled: the QR token itself isn't secret (it's the ticket holder's
+    own code), so the 6-digit staff ID is the only thing stopping someone
+    from self-verifying their own ticket by brute force.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ticket_verify"
+
+    def post(self, request):
+        token = (request.data.get("token") or "").strip()
+        staff_unique_id = (request.data.get("staff_unique_id") or "").strip()
+        if not token:
+            return Response({"detail": "token is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not staff_unique_id:
+            return Response({"detail": "Staff ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            ticket_id = verify_qr_token(token)
+        except InvalidTicketToken:
+            return Response({"detail": "Invalid QR code."}, status=status.HTTP_400_BAD_REQUEST)
+
+        staff = Staff.objects.filter(unique_id=staff_unique_id).first()
+        if staff is None:
+            return Response({"detail": "Invalid staff ID."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             ticket = TicketOrder.objects.select_for_update().filter(id=ticket_id).first()
@@ -257,16 +307,43 @@ class TicketCheckInView(APIView):
             if not already_checked_in:
                 ticket.status = TicketOrder.Status.CHECKED_IN
                 ticket.checked_in_at = timezone.now()
-                ticket.checked_in_by = request.user
-                ticket.save(update_fields=["status", "checked_in_at", "checked_in_by"])
+                ticket.checked_in_by_staff = staff
+                ticket.save(update_fields=["status", "checked_in_at", "checked_in_by_staff"])
 
         return Response({
             "already_checked_in": already_checked_in,
             "checked_in_at": ticket.checked_in_at,
-            "checked_in_by": ticket.checked_in_by.name if ticket.checked_in_by else "",
+            "checked_in_by": ticket.checked_in_by_staff.name if ticket.checked_in_by_staff else "",
             "product_name": ticket.product_name,
             "buyer_name": ticket.user.name if ticket.user else "",
         })
+
+
+class AdminStaffListView(APIView):
+    """GET/POST /api/v1/admin/staff/ — the gate-staff roster."""
+
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        return Response(StaffSerializer(Staff.objects.all(), many=True).data)
+
+    def post(self, request):
+        serializer = StaffSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AdminStaffDetailView(APIView):
+    """DELETE /api/v1/admin/staff/<id>/"""
+
+    permission_classes = [IsAdmin]
+
+    def delete(self, request, pk):
+        deleted, _ = Staff.objects.filter(pk=pk).delete()
+        if not deleted:
+            return Response({"detail": "Staff member not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AdminTicketListView(APIView):
@@ -278,7 +355,7 @@ class AdminTicketListView(APIView):
         qs = (
             TicketOrder.objects
             .exclude(status=TicketOrder.Status.PENDING)
-            .select_related("user", "checked_in_by")
+            .select_related("user", "checked_in_by_staff")
             .order_by("-created_at")
         )
 

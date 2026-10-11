@@ -3,6 +3,7 @@ import uuid
 from io import BytesIO
 
 import qrcode
+from django.conf import settings
 from django.core.signing import BadSignature, Signer
 
 from .constants import BUNDLE_SUB_CAP, LEAGUE_WIDE_CAPS, MATCHDAY_CAP
@@ -151,11 +152,23 @@ def render_qr_base64(token: str) -> str:
     return base64.b64encode(render_qr_png_bytes(token)).decode("ascii")
 
 
+def make_verify_url(ticket_id) -> str:
+    """
+    The actual QR content — a URL, not a bare token. A phone's native camera
+    recognizes a URL in a QR code and offers to open it directly in the
+    browser, landing on the public /tickets/verify page where staff complete
+    the check-in. The token itself (make_qr_token) is unchanged — this just
+    wraps it in a link.
+    """
+    token = make_qr_token(ticket_id)
+    return f"{settings.FRONTEND_BASE_URL}/tickets/verify?token={token}"
+
+
 def ticket_qr_base64(ticket: TicketOrder) -> str:
     """Convenience wrapper — the QR image for a given ticket, derived fresh from its id."""
-    return render_qr_base64(make_qr_token(ticket.id))
+    return render_qr_base64(make_verify_url(ticket.id))
 
 
 def ticket_qr_png_bytes(ticket: TicketOrder) -> bytes:
     """Convenience wrapper — raw PNG bytes, for attaching inline (cid:) to an email."""
-    return render_qr_png_bytes(make_qr_token(ticket.id))
+    return render_qr_png_bytes(make_verify_url(ticket.id))

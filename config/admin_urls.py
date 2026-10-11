@@ -11,7 +11,7 @@ from apps.applications.views import AdminApplicationListView, AdminApplicationUp
 from apps.kits.views import AdminKitExportView, AdminKitListView
 from apps.payments.views import AdminPaymentListView
 from apps.teams.views import AdminMembershipActionView, AdminMembershipListView, AdminTeamListView
-from apps.tickets.views import AdminTicketListView
+from apps.tickets.views import AdminStaffDetailView, AdminStaffListView, AdminTicketListView
 from apps.users.admin_views import AdminFanListView, AdminUserListView
 from apps.users.profile_views import (
     AdminPlayerListView,
@@ -92,6 +92,14 @@ urlpatterns = [
     # GET /api/v1/admin/tickets/   — every completed ticket purchase
     # ------------------------------------------------------------------
     path("tickets/",                               AdminTicketListView.as_view(),           name="admin_ticket_list"),
+
+    # ------------------------------------------------------------------
+    # Staff (gate-check-in roster)
+    # GET/POST /api/v1/admin/staff/
+    # DELETE   /api/v1/admin/staff/{id}/
+    # ------------------------------------------------------------------
+    path("staff/",                                 AdminStaffListView.as_view(),            name="admin_staff_list"),
+    path("staff/<uuid:pk>/",                       AdminStaffDetailView.as_view(),          name="admin_staff_detail"),
 
     path("players/",                              AdminPlayerListView.as_view(),           name="admin_player_list"),
     path("players/<uuid:user_id>/stats/",         AdminPlayerStatsUpdateView.as_view(),    name="admin_player_stats"),

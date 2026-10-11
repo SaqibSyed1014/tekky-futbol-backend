@@ -68,8 +68,8 @@ class TicketOrder(models.Model):
         db_index=True,
     )
     checked_in_at = models.DateTimeField(null=True, blank=True)
-    checked_in_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+    checked_in_by_staff = models.ForeignKey(
+        "Staff",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -88,6 +88,28 @@ class TicketOrder(models.Model):
 
     def __str__(self) -> str:
         return f"{self.email or self.stripe_session_id} — {self.product_name}"
+
+
+class Staff(models.Model):
+    """
+    A gate-staff roster entry — not a User account, just a name + optional
+    email + a 6-digit ID the admin assigns by hand (never auto-generated).
+    The unique_id is what a staff member types into the ticket-verify page
+    to prove they're the one completing a check-in, instead of a login.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=150)
+    email = models.EmailField(blank=True, default="")
+    unique_id = models.CharField(max_length=6, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "ticket_staff"
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.unique_id})"
 
 
 class CapacityBucket(models.Model):

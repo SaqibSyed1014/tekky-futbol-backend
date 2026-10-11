@@ -1,7 +1,11 @@
+import re
+
 from rest_framework import serializers
 
-from .models import TicketOrder
+from .models import Staff, TicketOrder
 from .services import ticket_qr_base64
+
+UNIQUE_ID_RE = re.compile(r"^\d{6}$")
 
 
 class MyTicketSerializer(serializers.ModelSerializer):
@@ -41,7 +45,7 @@ class AdminTicketSerializer(serializers.ModelSerializer):
     buyer_name = serializers.SerializerMethodField()
     buyer_email = serializers.SerializerMethodField()
     is_guest = serializers.SerializerMethodField()
-    checked_in_by_name = serializers.CharField(source="checked_in_by.name", read_only=True, default="")
+    checked_in_by_name = serializers.CharField(source="checked_in_by_staff.name", read_only=True, default="")
 
     class Meta:
         model = TicketOrder
@@ -72,3 +76,24 @@ class AdminTicketSerializer(serializers.ModelSerializer):
         # never have filled in their name. Whether a user is attached at all
         # is the actual signal.
         return obj.user_id is None
+
+
+class StaffSerializer(serializers.ModelSerializer):
+    """Admin staff-roster list/create. unique_id is entered by the admin, never generated."""
+
+    class Meta:
+        model = Staff
+        fields = ["id", "name", "email", "unique_id", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_unique_id(self, value):
+        value = (value or "").strip()
+        if not UNIQUE_ID_RE.match(value):
+            raise serializers.ValidationError("Must be exactly 6 digits.")
+        return value
+
+    def validate_name(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Name is required.")
+        return value

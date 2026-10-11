@@ -208,6 +208,11 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "apps.core.exceptions.custom_exception_handler",
+    # Per-view scoped throttles — only views that explicitly set throttle_scope
+    # use these; nothing else in the API is throttled.
+    "DEFAULT_THROTTLE_RATES": {
+        "ticket_verify": "20/min",
+    },
 }
 
 # ---------------------------------------------------------------------------
