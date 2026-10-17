@@ -21,6 +21,7 @@ from .constants import (
     MAX_WEEK_NUMBER,
     MIN_WEEK_NUMBER,
     PURCHASABLE_TIERS,
+    SUPPORTER_BUNDLE_MERCH,
     TIER_LABELS,
     TIER_PRICES_CENTS,
 )
@@ -47,11 +48,20 @@ def _build_product_name(tier, division, week_number):
 
 
 def _build_product_description(fields):
-    """Surfaces the buyer's apparel choice on the Stripe checkout page itself."""
+    """Surfaces the buyer's merch + apparel choice on the Stripe checkout page itself."""
     if not fields["apparel_size"]:
         return None
+    merch = SUPPORTER_BUNDLE_MERCH[fields["division"]][fields["merch_item_id"]]
     fulfillment_label = dict(TicketOrder.Fulfillment.choices)[fields["fulfillment_method"]]
-    return f"Size {fields['apparel_size']} — {fulfillment_label}"
+    return f"{merch['name']} — Size {fields['apparel_size']} — {fulfillment_label}"
+
+
+def _build_product_image_url(fields):
+    """Absolute URL to the selected merch item's photo, for Stripe's product_data.images."""
+    if not fields["merch_item_id"]:
+        return None
+    merch = SUPPORTER_BUNDLE_MERCH[fields["division"]][fields["merch_item_id"]]
+    return f"{settings.FRONTEND_BASE_URL}/images/divisions/{fields['division']}/{merch['product_type']}/blue.jpg"
 
 
 def _parse_checkout_input(data):
@@ -77,8 +87,13 @@ def _parse_checkout_input(data):
 
     apparel_size = ""
     fulfillment_method = ""
+    merch_item_id = ""
 
     if tier == TicketOrder.Tier.SUPPORTER_BUNDLE:
+        merch_item_id = (data.get("merch_item_id") or "").strip()
+        if merch_item_id not in SUPPORTER_BUNDLE_MERCH.get(division, {}):
+            return None, "A valid merchandise item is required for the Supporter Bundle."
+
         apparel_size = (data.get("apparel_size") or "").strip().upper()
         if apparel_size not in TicketOrder.ApparelSize.values:
             return None, "A valid apparel size is required for the Supporter Bundle."
@@ -93,6 +108,7 @@ def _parse_checkout_input(data):
         "week_number": week_number,
         "apparel_size": apparel_size,
         "fulfillment_method": fulfillment_method,
+        "merch_item_id": merch_item_id,
     }, None
 
 
@@ -122,6 +138,7 @@ class TicketCheckoutView(APIView):
         amount_cents = TIER_PRICES_CENTS[fields["tier"]]
         product_name = _build_product_name(fields["tier"], fields["division"], fields["week_number"])
         product_description = _build_product_description(fields)
+        product_image_url = _build_product_image_url(fields)
 
         user = request.user if request.user and request.user.is_authenticated else None
 
@@ -139,6 +156,8 @@ class TicketCheckoutView(APIView):
                 product_data = {"name": product_name}
                 if product_description:
                     product_data["description"] = product_description
+                if product_image_url:
+                    product_data["images"] = [product_image_url]
 
                 session = stripe.checkout.Session.create(
                     payment_method_types=["card"],
@@ -165,6 +184,7 @@ class TicketCheckoutView(APIView):
                     week_number=fields["week_number"],
                     apparel_size=fields["apparel_size"],
                     fulfillment_method=fields["fulfillment_method"],
+                    merch_item_id=fields["merch_item_id"],
                     product_name=product_name,
                     amount_cents=amount_cents,
                     status=TicketOrder.Status.PENDING,

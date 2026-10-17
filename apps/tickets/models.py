@@ -57,6 +57,9 @@ class TicketOrder(models.Model):
 
     apparel_size = models.CharField(max_length=4, choices=ApparelSize.choices, blank=True, default="")
     fulfillment_method = models.CharField(max_length=10, choices=Fulfillment.choices, blank=True, default="")
+    # References a key in apps.tickets.constants.SUPPORTER_BUNDLE_MERCH[division] —
+    # the shop-catalog item the buyer picked for the Supporter Bundle.
+    merch_item_id = models.CharField(max_length=40, blank=True, default="")
 
     product_name = models.CharField(max_length=500)
     amount_cents = models.PositiveIntegerField(default=0)

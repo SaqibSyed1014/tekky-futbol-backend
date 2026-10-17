@@ -43,3 +43,22 @@ TIER_LABELS = {
 # not sellable yet. Enforced server-side too, not just hidden on the frontend.
 PURCHASABLE_TIERS = {"single_match", "supporter_bundle", "season_pass", "playoff_pass"}
 MATCHDAY_TIERS = {"single_match", "supporter_bundle"}
+
+# The Supporter Bundle's apparel item is picked from the shop's division
+# catalog — mirrors the product data in tekky-futbol-nextjs/data/divisionProducts.js.
+# Kept server-side too so a tampered request can't inject an arbitrary
+# product name/description into the Stripe checkout page or stored order.
+SUPPORTER_BUNDLE_MERCH = {
+    "north": {
+        "north-hoodie": {"name": "Pitch Side Hoodie", "description": "Season 01 North Drop", "product_type": "Hoodie"},
+        "north-pant": {"name": "Pitch Warm-Up Trouser", "description": "Season 01 North Drop", "product_type": "Pant"},
+        "north-short": {"name": "S01 Match Shorts", "description": "Season 01 North Drop", "product_type": "Short"},
+        "north-tshirt": {"name": "S01 Match Jersey", "description": "Season 01 North Drop", "product_type": "Tshirt"},
+    },
+    "south": {
+        "south-hoodie": {"name": "Pitch Side Hoodie", "description": "Season 01 South Drop", "product_type": "Hoodie"},
+        "south-pant": {"name": "Pitch Warm-Up Trouser", "description": "Season 01 South Drop", "product_type": "Pant"},
+        "south-short": {"name": "S01 Match Shorts", "description": "Season 01 South Drop", "product_type": "Short"},
+        "south-tshirt": {"name": "S01 Match Jersey", "description": "Season 01 South Drop", "product_type": "Tshirt"},
+    },
+}
