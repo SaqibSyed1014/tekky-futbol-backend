@@ -62,26 +62,63 @@ class TicketCheckoutViewTests(BaseAPITestCase):
         order = TicketOrder.objects.get(stripe_session_id="cs_test_123")
         self.assertEqual(order.amount_cents, 1000)
 
-    def test_bundle_does_not_require_size_or_fulfillment(self):
-        """Apparel size / fulfillment are no longer collected at checkout — the
-        bundle purchase must succeed without them."""
+    def test_bundle_requires_apparel_size(self):
+        with _patched_stripe() as mock_create:
+            response = self.client.post(CHECKOUT_URL, {
+                "tier": "supporter_bundle",
+                "division": "north",
+                "week_number": 1,
+                "fulfillment_method": "ship",
+            })
+
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+        mock_create.assert_not_called()
+
+    def test_bundle_requires_fulfillment_method(self):
+        with _patched_stripe() as mock_create:
+            response = self.client.post(CHECKOUT_URL, {
+                "tier": "supporter_bundle",
+                "division": "north",
+                "week_number": 1,
+                "apparel_size": "L",
+            })
+
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+        mock_create.assert_not_called()
+
+    def test_bundle_rejects_an_invalid_size_or_fulfillment_value(self):
+        with _patched_stripe() as mock_create:
+            response = self.client.post(CHECKOUT_URL, {
+                "tier": "supporter_bundle",
+                "division": "north",
+                "week_number": 1,
+                "apparel_size": "XXXL",  # not a real choice
+                "fulfillment_method": "ship",
+            })
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+        mock_create.assert_not_called()
+
+    def test_bundle_checkout_stores_size_and_fulfillment(self):
         with _patched_stripe():
             response = self.client.post(CHECKOUT_URL, {
                 "tier": "supporter_bundle",
                 "division": "north",
                 "week_number": 1,
+                "apparel_size": "l",  # lowercase input — normalized to the stored choice
+                "fulfillment_method": "ship",
             })
 
         self.assert_status(response, status.HTTP_200_OK)
         order = TicketOrder.objects.get(stripe_session_id="cs_test_123")
-        self.assertEqual(order.apparel_size, "")
-        self.assertEqual(order.fulfillment_method, "")
+        self.assertEqual(order.apparel_size, "L")
+        self.assertEqual(order.fulfillment_method, "ship")
         self.assertEqual(order.amount_cents, 6000)
 
-    def test_bundle_ignores_size_and_fulfillment_if_sent_anyway(self):
+    def test_single_match_ignores_size_and_fulfillment_if_sent(self):
+        """Apparel fields are only meaningful for the Supporter Bundle tier."""
         with _patched_stripe():
             response = self.client.post(CHECKOUT_URL, {
-                "tier": "supporter_bundle",
+                "tier": "single_match",
                 "division": "north",
                 "week_number": 1,
                 "apparel_size": "L",

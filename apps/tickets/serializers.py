@@ -57,6 +57,8 @@ class AdminTicketSerializer(serializers.ModelSerializer):
             "tier",
             "division",
             "week_number",
+            "apparel_size",
+            "fulfillment_method",
             "amount_cents",
             "status",
             "checked_in_at",

@@ -67,13 +67,24 @@ def _parse_checkout_input(data):
         if not (MIN_WEEK_NUMBER <= week_number <= MAX_WEEK_NUMBER):
             return None, f"Week must be between {MIN_WEEK_NUMBER} and {MAX_WEEK_NUMBER}."
 
-    # Apparel size / fulfillment method are no longer collected at checkout —
-    # the Supporter Bundle ships without a pre-purchase size/fulfillment
-    # picker. TicketOrder.apparel_size/fulfillment_method stay blank.
+    apparel_size = ""
+    fulfillment_method = ""
+
+    if tier == TicketOrder.Tier.SUPPORTER_BUNDLE:
+        apparel_size = (data.get("apparel_size") or "").strip().upper()
+        if apparel_size not in TicketOrder.ApparelSize.values:
+            return None, "A valid apparel size is required for the Supporter Bundle."
+
+        fulfillment_method = (data.get("fulfillment_method") or "").strip()
+        if fulfillment_method not in TicketOrder.Fulfillment.values:
+            return None, "A valid fulfillment method is required for the Supporter Bundle."
+
     return {
         "tier": tier,
         "division": division,
         "week_number": week_number,
+        "apparel_size": apparel_size,
+        "fulfillment_method": fulfillment_method,
     }, None
 
 
@@ -139,6 +150,8 @@ class TicketCheckoutView(APIView):
                     tier=fields["tier"],
                     division=fields["division"],
                     week_number=fields["week_number"],
+                    apparel_size=fields["apparel_size"],
+                    fulfillment_method=fields["fulfillment_method"],
                     product_name=product_name,
                     amount_cents=amount_cents,
                     status=TicketOrder.Status.PENDING,
