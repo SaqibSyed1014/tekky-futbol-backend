@@ -62,3 +62,13 @@ SUPPORTER_BUNDLE_MERCH = {
         "south-tshirt": {"name": "S01 Match Jersey", "description": "Season 01 South Drop", "product_type": "Tshirt"},
     },
 }
+
+# Mirrors components/shop/ColorSwatches.js PRODUCT_COLORS keys — image filenames
+# live at public/images/divisions/<division>/<productType>/<color>.jpg.
+SUPPORTER_BUNDLE_COLORS = {
+    "blue": "Blue",
+    "purple": "Purple",
+    "sky-blue": "Sky Blue",
+    "green": "Green",
+    "orange": "Orange",
+}

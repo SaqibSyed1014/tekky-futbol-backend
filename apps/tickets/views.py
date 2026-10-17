@@ -21,6 +21,7 @@ from .constants import (
     MAX_WEEK_NUMBER,
     MIN_WEEK_NUMBER,
     PURCHASABLE_TIERS,
+    SUPPORTER_BUNDLE_COLORS,
     SUPPORTER_BUNDLE_MERCH,
     TIER_LABELS,
     TIER_PRICES_CENTS,
@@ -52,8 +53,9 @@ def _build_product_description(fields):
     if not fields["apparel_size"]:
         return None
     merch = SUPPORTER_BUNDLE_MERCH[fields["division"]][fields["merch_item_id"]]
+    color_label = SUPPORTER_BUNDLE_COLORS[fields["merch_item_color"]]
     fulfillment_label = dict(TicketOrder.Fulfillment.choices)[fields["fulfillment_method"]]
-    return f"{merch['name']} — Size {fields['apparel_size']} — {fulfillment_label}"
+    return f"{merch['name']} ({color_label}) — Size {fields['apparel_size']} — {fulfillment_label}"
 
 
 def _build_product_image_url(fields):
@@ -61,7 +63,10 @@ def _build_product_image_url(fields):
     if not fields["merch_item_id"]:
         return None
     merch = SUPPORTER_BUNDLE_MERCH[fields["division"]][fields["merch_item_id"]]
-    return f"{settings.FRONTEND_BASE_URL}/images/divisions/{fields['division']}/{merch['product_type']}/blue.jpg"
+    return (
+        f"{settings.FRONTEND_BASE_URL}/images/divisions/"
+        f"{fields['division']}/{merch['product_type']}/{fields['merch_item_color']}.jpg"
+    )
 
 
 def _parse_checkout_input(data):
@@ -88,11 +93,16 @@ def _parse_checkout_input(data):
     apparel_size = ""
     fulfillment_method = ""
     merch_item_id = ""
+    merch_item_color = ""
 
     if tier == TicketOrder.Tier.SUPPORTER_BUNDLE:
         merch_item_id = (data.get("merch_item_id") or "").strip()
         if merch_item_id not in SUPPORTER_BUNDLE_MERCH.get(division, {}):
             return None, "A valid merchandise item is required for the Supporter Bundle."
+
+        merch_item_color = (data.get("merch_item_color") or "").strip()
+        if merch_item_color not in SUPPORTER_BUNDLE_COLORS:
+            return None, "A valid color is required for the Supporter Bundle."
 
         apparel_size = (data.get("apparel_size") or "").strip().upper()
         if apparel_size not in TicketOrder.ApparelSize.values:
@@ -109,6 +119,7 @@ def _parse_checkout_input(data):
         "apparel_size": apparel_size,
         "fulfillment_method": fulfillment_method,
         "merch_item_id": merch_item_id,
+        "merch_item_color": merch_item_color,
     }, None
 
 
@@ -185,6 +196,7 @@ class TicketCheckoutView(APIView):
                     apparel_size=fields["apparel_size"],
                     fulfillment_method=fields["fulfillment_method"],
                     merch_item_id=fields["merch_item_id"],
+                    merch_item_color=fields["merch_item_color"],
                     product_name=product_name,
                     amount_cents=amount_cents,
                     status=TicketOrder.Status.PENDING,

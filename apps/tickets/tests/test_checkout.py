@@ -90,6 +90,35 @@ class TicketCheckoutViewTests(BaseAPITestCase):
         self.assert_status(response, status.HTTP_400_BAD_REQUEST)
         mock_create.assert_not_called()
 
+    def test_bundle_requires_color(self):
+        with _patched_stripe() as mock_create:
+            response = self.client.post(CHECKOUT_URL, {
+                "tier": "supporter_bundle",
+                "division": "north",
+                "week_number": 1,
+                "merch_item_id": "north-hoodie",
+                "apparel_size": "L",
+                "fulfillment_method": "ship",
+            })
+
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+        mock_create.assert_not_called()
+
+    def test_bundle_rejects_an_invalid_color(self):
+        with _patched_stripe() as mock_create:
+            response = self.client.post(CHECKOUT_URL, {
+                "tier": "supporter_bundle",
+                "division": "north",
+                "week_number": 1,
+                "merch_item_id": "north-hoodie",
+                "merch_item_color": "red",  # not a real choice
+                "apparel_size": "L",
+                "fulfillment_method": "ship",
+            })
+
+        self.assert_status(response, status.HTTP_400_BAD_REQUEST)
+        mock_create.assert_not_called()
+
     def test_bundle_requires_apparel_size(self):
         with _patched_stripe() as mock_create:
             response = self.client.post(CHECKOUT_URL, {
@@ -97,6 +126,7 @@ class TicketCheckoutViewTests(BaseAPITestCase):
                 "division": "north",
                 "week_number": 1,
                 "merch_item_id": "north-hoodie",
+                "merch_item_color": "blue",
                 "fulfillment_method": "ship",
             })
 
@@ -110,6 +140,7 @@ class TicketCheckoutViewTests(BaseAPITestCase):
                 "division": "north",
                 "week_number": 1,
                 "merch_item_id": "north-hoodie",
+                "merch_item_color": "blue",
                 "apparel_size": "L",
             })
 
@@ -123,19 +154,21 @@ class TicketCheckoutViewTests(BaseAPITestCase):
                 "division": "north",
                 "week_number": 1,
                 "merch_item_id": "north-hoodie",
+                "merch_item_color": "blue",
                 "apparel_size": "XXXL",  # not a real choice
                 "fulfillment_method": "ship",
             })
         self.assert_status(response, status.HTTP_400_BAD_REQUEST)
         mock_create.assert_not_called()
 
-    def test_bundle_checkout_stores_merch_size_and_fulfillment(self):
+    def test_bundle_checkout_stores_merch_color_size_and_fulfillment(self):
         with _patched_stripe():
             response = self.client.post(CHECKOUT_URL, {
                 "tier": "supporter_bundle",
                 "division": "north",
                 "week_number": 1,
                 "merch_item_id": "north-hoodie",
+                "merch_item_color": "purple",
                 "apparel_size": "l",  # lowercase input — normalized to the stored choice
                 "fulfillment_method": "ship",
             })
@@ -143,26 +176,28 @@ class TicketCheckoutViewTests(BaseAPITestCase):
         self.assert_status(response, status.HTTP_200_OK)
         order = TicketOrder.objects.get(stripe_session_id="cs_test_123")
         self.assertEqual(order.merch_item_id, "north-hoodie")
+        self.assertEqual(order.merch_item_color, "purple")
         self.assertEqual(order.apparel_size, "L")
         self.assertEqual(order.fulfillment_method, "ship")
         self.assertEqual(order.amount_cents, 6000)
 
-    def test_bundle_checkout_shows_merch_size_and_fulfillment_on_stripe_page(self):
+    def test_bundle_checkout_shows_merch_color_size_and_fulfillment_on_stripe_page(self):
         with _patched_stripe() as mock_create:
             self.client.post(CHECKOUT_URL, {
                 "tier": "supporter_bundle",
                 "division": "north",
                 "week_number": 1,
                 "merch_item_id": "north-hoodie",
+                "merch_item_color": "green",
                 "apparel_size": "XL",
                 "fulfillment_method": "pickup",
             })
 
         product_data = mock_create.call_args.kwargs["line_items"][0]["price_data"]["product_data"]
-        self.assertEqual(product_data["description"], "Pitch Side Hoodie — Size XL — Pickup at venue")
+        self.assertEqual(product_data["description"], "Pitch Side Hoodie (Green) — Size XL — Pickup at venue")
         self.assertEqual(
             product_data["images"],
-            [f"{settings.FRONTEND_BASE_URL}/images/divisions/north/Hoodie/blue.jpg"],
+            [f"{settings.FRONTEND_BASE_URL}/images/divisions/north/Hoodie/green.jpg"],
         )
 
     def test_single_match_has_no_stripe_description(self):
@@ -186,6 +221,7 @@ class TicketCheckoutViewTests(BaseAPITestCase):
                 "division": "north",
                 "week_number": 1,
                 "merch_item_id": "north-hoodie",
+                "merch_item_color": "blue",
                 "apparel_size": "L",
                 "fulfillment_method": "ship",
             })
@@ -193,6 +229,7 @@ class TicketCheckoutViewTests(BaseAPITestCase):
         self.assert_status(response, status.HTTP_200_OK)
         order = TicketOrder.objects.get(stripe_session_id="cs_test_123")
         self.assertEqual(order.merch_item_id, "")
+        self.assertEqual(order.merch_item_color, "")
         self.assertEqual(order.apparel_size, "")
         self.assertEqual(order.fulfillment_method, "")
 
