@@ -114,6 +114,31 @@ class TicketCheckoutViewTests(BaseAPITestCase):
         self.assertEqual(order.fulfillment_method, "ship")
         self.assertEqual(order.amount_cents, 6000)
 
+    def test_bundle_checkout_shows_size_and_fulfillment_on_stripe_page(self):
+        with _patched_stripe() as mock_create:
+            self.client.post(CHECKOUT_URL, {
+                "tier": "supporter_bundle",
+                "division": "north",
+                "week_number": 1,
+                "apparel_size": "XL",
+                "fulfillment_method": "pickup",
+            })
+
+        product_data = mock_create.call_args.kwargs["line_items"][0]["price_data"]["product_data"]
+        self.assertEqual(product_data["description"], "Size XL — Pickup at venue")
+
+    def test_single_match_has_no_stripe_description(self):
+        """No apparel selection means nothing to show on the Stripe page."""
+        with _patched_stripe() as mock_create:
+            self.client.post(CHECKOUT_URL, {
+                "tier": "single_match",
+                "division": "north",
+                "week_number": 1,
+            })
+
+        product_data = mock_create.call_args.kwargs["line_items"][0]["price_data"]["product_data"]
+        self.assertNotIn("description", product_data)
+
     def test_single_match_ignores_size_and_fulfillment_if_sent(self):
         """Apparel fields are only meaningful for the Supporter Bundle tier."""
         with _patched_stripe():

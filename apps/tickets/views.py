@@ -46,6 +46,14 @@ def _build_product_name(tier, division, week_number):
     return label
 
 
+def _build_product_description(fields):
+    """Surfaces the buyer's apparel choice on the Stripe checkout page itself."""
+    if not fields["apparel_size"]:
+        return None
+    fulfillment_label = dict(TicketOrder.Fulfillment.choices)[fields["fulfillment_method"]]
+    return f"Size {fields['apparel_size']} — {fulfillment_label}"
+
+
 def _parse_checkout_input(data):
     """Validates and normalizes the checkout request body. Returns (fields_dict, error_message)."""
     tier = (data.get("tier") or "").strip()
@@ -113,6 +121,7 @@ class TicketCheckoutView(APIView):
 
         amount_cents = TIER_PRICES_CENTS[fields["tier"]]
         product_name = _build_product_name(fields["tier"], fields["division"], fields["week_number"])
+        product_description = _build_product_description(fields)
 
         user = request.user if request.user and request.user.is_authenticated else None
 
@@ -127,12 +136,16 @@ class TicketCheckoutView(APIView):
 
                 expires_at = int((timezone.now() + timedelta(minutes=CHECKOUT_SESSION_TTL_MINUTES)).timestamp())
 
+                product_data = {"name": product_name}
+                if product_description:
+                    product_data["description"] = product_description
+
                 session = stripe.checkout.Session.create(
                     payment_method_types=["card"],
                     line_items=[{
                         "price_data": {
                             "currency": "usd",
-                            "product_data": {"name": product_name},
+                            "product_data": product_data,
                             "unit_amount": amount_cents,
                         },
                         "quantity": 1,
